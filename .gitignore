@@ -1,0 +1,8 @@
+.env
+__pycache__/
+.venv/
+data/
+master_copy_instructions.json
+streamlit.log
+streamlit_server.log
+.streamlit/secrets.toml

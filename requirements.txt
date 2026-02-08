@@ -1,2 +1,7 @@
 streamlit
 pillow
+huggingface_hub
+python-dotenv
+requests
+beautifulsoup4
+libsql-experimental
