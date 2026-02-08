@@ -827,7 +827,7 @@ with tab_restaurants:
 
     if st.session_state['restaurants_list']:
         for rest_name in st.session_state['restaurants_list']:
-            col1, col2 = st.columns([4, 1])
+            col1, col2 = st.columns([3, 1])
             with col1:
                 # Count uploaded images
                 image_count = 0
@@ -857,7 +857,7 @@ with tab_restaurants:
                 url_html = f'<div class="rest-url">{rest_url}</div>' if rest_url else ''
                 star = '&#9733; ' if is_active else ''
                 st.markdown(f"""
-                <div class="restaurant-row{active_class}">
+                <div class="restaurant-row{active_class}" data-name="{rest_name}">
                     <div class="rest-name">{star}{rest_name}</div>
                     {url_html}
                     <div class="rest-stats">
@@ -868,21 +868,51 @@ with tab_restaurants:
                 </div>
                 """, unsafe_allow_html=True)
 
-                if st.button("Select", key=f"select_{rest_name}", use_container_width=True):
-                    st.session_state['restaurant_name_cleaned'] = rest_name
-                    st.rerun()
-
             with col2:
-                st.write("")  # Spacer to align with card
-                if st.button("Delete", key=f"delete_{rest_name}"):
-                    db.delete_restaurant(rest_name)
-                    st.session_state['restaurants_list'].remove(rest_name)
-                    if st.session_state.get('restaurant_name_cleaned') == rest_name:
-                        st.session_state['restaurant_name_cleaned'] = (
-                            st.session_state['restaurants_list'][0]
-                            if st.session_state['restaurants_list'] else None
-                        )
-                    st.rerun()
+                btn_sel, btn_del = st.columns(2)
+                with btn_sel:
+                    if st.button("Select", key=f"select_{rest_name}"):
+                        st.session_state['restaurant_name_cleaned'] = rest_name
+                        st.rerun()
+                with btn_del:
+                    if st.button("Delete", key=f"delete_{rest_name}"):
+                        db.delete_restaurant(rest_name)
+                        st.session_state['restaurants_list'].remove(rest_name)
+                        if st.session_state.get('restaurant_name_cleaned') == rest_name:
+                            st.session_state['restaurant_name_cleaned'] = (
+                                st.session_state['restaurants_list'][0]
+                                if st.session_state['restaurants_list'] else None
+                            )
+                        st.rerun()
+
+        # Wire up card clicks to trigger the corresponding Select button
+        components.html("""
+        <script>
+        setTimeout(() => {
+            const doc = window.parent.document;
+            const rows = doc.querySelectorAll('.restaurant-row[data-name]');
+            rows.forEach((row) => {
+                row.addEventListener('click', function() {
+                    const name = this.getAttribute('data-name');
+                    const buttons = doc.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        if (btn.textContent.trim() === 'Select' &&
+                            btn.closest('[data-testid]') &&
+                            btn.id && btn.id.includes(name)) {
+                            btn.click();
+                            return;
+                        }
+                    }
+                    // Fallback: match by index
+                    const allRows = Array.from(doc.querySelectorAll('.restaurant-row[data-name]'));
+                    const idx = allRows.indexOf(this);
+                    const selectBtns = Array.from(buttons).filter(b => b.textContent.trim() === 'Select');
+                    if (selectBtns[idx]) selectBtns[idx].click();
+                });
+            });
+        }, 500);
+        </script>
+        """, height=0)
     else:
         st.info("No restaurants added yet. Create one above!")
 
