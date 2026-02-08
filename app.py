@@ -113,7 +113,7 @@ def copy_button(text, key):
     onmouseover="if(this.innerText==='Copy'){{this.style.background='#031E41';this.style.color='#FFFFFF';}}"
     onmouseout="if(this.innerText==='Copy'){{this.style.background='transparent';this.style.color='#031E41';}}"
     >Copy</button>
-    """, height=42)
+    """, height=50)
 
 # ============================================================================
 # HUGGING FACE ALT TEXT GENERATION (Free Inference API)
@@ -367,7 +367,7 @@ img { border-radius: 0 !important; }
 .starr-header {
     background: linear-gradient(135deg, #031E41 0%, #0A3366 100%);
     padding: 1.5rem 2rem;
-    margin: -1rem -1rem 1.5rem -1rem;
+    margin: 0 -1rem 1.5rem -1rem;
     border-bottom: 3px solid #C5A258;
 }
 .starr-header h1 {
@@ -855,10 +855,33 @@ with tab_restaurants:
                 """, unsafe_allow_html=True)
 
             with col2:
-                if st.button("Select", key=f"select_{rest_name}"):
-                    st.session_state['restaurant_name_cleaned'] = rest_name
-                    st.success(f"Selected: {rest_name}")
-                    st.rerun()
+                btn_sel, btn_del = st.columns(2)
+                with btn_sel:
+                    if st.button("Select", key=f"select_{rest_name}"):
+                        st.session_state['restaurant_name_cleaned'] = rest_name
+                        st.rerun()
+                with btn_del:
+                    if st.button("Delete", key=f"delete_{rest_name}"):
+                        st.session_state[f"confirm_delete_{rest_name}"] = True
+
+                if st.session_state.get(f"confirm_delete_{rest_name}"):
+                    st.warning(f"Delete **{rest_name}** and all its images/copy? This cannot be undone.")
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("Confirm Delete", key=f"confirm_del_yes_{rest_name}"):
+                            db.delete_restaurant(rest_name)
+                            st.session_state['restaurants_list'].remove(rest_name)
+                            if st.session_state.get('restaurant_name_cleaned') == rest_name:
+                                st.session_state['restaurant_name_cleaned'] = (
+                                    st.session_state['restaurants_list'][0]
+                                    if st.session_state['restaurants_list'] else None
+                                )
+                            st.session_state.pop(f"confirm_delete_{rest_name}", None)
+                            st.rerun()
+                    with col_no:
+                        if st.button("Cancel", key=f"confirm_del_no_{rest_name}"):
+                            st.session_state.pop(f"confirm_delete_{rest_name}", None)
+                            st.rerun()
     else:
         st.info("No restaurants added yet. Create one above!")
 
@@ -1065,22 +1088,8 @@ with tab_images:
                         if has_persisted or is_fresh_upload:
                             db.update_alt_text(restaurant_name, name, new_alt)
 
-                    col_alt_copy, col_alt_gen = st.columns([1, 3])
-                    with col_alt_copy:
-                        if st.session_state[alt_key].strip():
-                            copy_button(st.session_state[alt_key], f"copy_alt_{name}")
-                    with col_alt_gen:
-                        if st.button("Generate Alt Text", key=f"autogen_{name}"):
-                            if st.session_state.get('hf_api_token'):
-                                with st.spinner("Generating..."):
-                                    alt_text = generate_alt_text(resized_img)
-                                    if alt_text:
-                                        st.session_state[alt_key] = alt_text
-                                        st.session_state[auto_key] = True
-                                        db.update_alt_text(restaurant_name, name, alt_text)
-                                        st.rerun()
-                            else:
-                                st.warning("Token not configured. Add HF_API_TOKEN to .env file.")
+                    if st.session_state[alt_key].strip():
+                        copy_button(st.session_state[alt_key], f"copy_alt_{name}")
 
             if i < len(fields) - 1:
                 st.markdown("---")
