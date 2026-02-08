@@ -607,7 +607,7 @@ button.rest-btn-light:hover {
 .restaurant-separator {
     border: none;
     border-top: 1px solid #E8E5DE;
-    margin: 0.35rem 0;
+    margin: 0.75rem 0;
 }
 
 /* === CUSTOM: RESTAURANT ROW === */
@@ -616,7 +616,7 @@ button.rest-btn-light:hover {
     border: 1px solid #E8E5DE;
     border-radius: 6px;
     padding: 0.75rem 1rem;
-    margin-bottom: 0.25rem;
+    margin: 0;
     transition: border-color 0.2s, box-shadow 0.2s;
     cursor: pointer;
 }
