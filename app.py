@@ -1280,7 +1280,7 @@ with tab_copy:
                 label_visibility="collapsed"
             )
 
-            col_reset, col_save = st.columns(2)
+            col_reset, col_save, _ = st.columns([1, 1, 4])
             with col_reset:
                 if st.button("Reset to Default"):
                     st.session_state['copy_instructions'] = DEFAULT_COPY_INSTRUCTIONS
