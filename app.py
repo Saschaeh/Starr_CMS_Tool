@@ -344,7 +344,7 @@ def generate_copy(website_text, restaurant_name, section=None, instructions=None
 # PAGE SETUP
 # ============================================================================
 
-st.set_page_config(page_title="Starr CMS Content Manager", layout="wide")
+st.set_page_config(page_title="Starr Restaurants", layout="wide")
 
 # ============================================================================
 # MASTER CSS — Starr Brand Theme
@@ -710,8 +710,8 @@ footer:after {
 # Branded header
 st.markdown("""
 <div class="starr-header">
-    <h1>Starr CMS Content Manager</h1>
-    <div class="starr-subtitle">Restaurant Content Management System</div>
+    <h1>Starr Restaurants</h1>
+    <div class="starr-subtitle">Restaurant Website Content Tool</div>
     <div class="made-tooled">Made{<em>Tooled</em>}</div>
 </div>
 """, unsafe_allow_html=True)
