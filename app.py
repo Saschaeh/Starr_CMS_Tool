@@ -850,6 +850,7 @@ with tab_restaurants:
 
     st.markdown("---")
     st.subheader("Restaurants Content Progress")
+    st.markdown('<hr style="border:none;border-top:1.5px solid #C5A258;margin:0 0 0.75rem 0">', unsafe_allow_html=True)
 
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
