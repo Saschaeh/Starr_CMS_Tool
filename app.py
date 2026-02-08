@@ -856,9 +856,10 @@ with tab_restaurants:
                 rest_url = st.session_state.get(f"{rest_name}_website_url", "")
                 url_html = f'<div class="rest-url">{rest_url}</div>' if rest_url else ''
                 star = '&#9733; ' if is_active else ''
+                display_name = rest_name.replace('_', ' ')
                 st.markdown(f"""
                 <div class="restaurant-row{active_class}" data-name="{rest_name}">
-                    <div class="rest-name">{star}{rest_name}</div>
+                    <div class="rest-name">{star}{display_name}</div>
                     {url_html}
                     <div class="rest-stats">
                         <span class="progress-pill images">Images: {image_count}/11</span>
@@ -869,21 +870,18 @@ with tab_restaurants:
                 """, unsafe_allow_html=True)
 
             with col2:
-                btn_sel, btn_del = st.columns(2)
-                with btn_sel:
-                    if st.button("Select", key=f"select_{rest_name}"):
-                        st.session_state['restaurant_name_cleaned'] = rest_name
-                        st.rerun()
-                with btn_del:
-                    if st.button("Delete", key=f"delete_{rest_name}"):
-                        db.delete_restaurant(rest_name)
-                        st.session_state['restaurants_list'].remove(rest_name)
-                        if st.session_state.get('restaurant_name_cleaned') == rest_name:
-                            st.session_state['restaurant_name_cleaned'] = (
-                                st.session_state['restaurants_list'][0]
-                                if st.session_state['restaurants_list'] else None
-                            )
-                        st.rerun()
+                if st.button("Select", key=f"select_{rest_name}", use_container_width=True):
+                    st.session_state['restaurant_name_cleaned'] = rest_name
+                    st.rerun()
+                if st.button("Delete", key=f"delete_{rest_name}", use_container_width=True):
+                    db.delete_restaurant(rest_name)
+                    st.session_state['restaurants_list'].remove(rest_name)
+                    if st.session_state.get('restaurant_name_cleaned') == rest_name:
+                        st.session_state['restaurant_name_cleaned'] = (
+                            st.session_state['restaurants_list'][0]
+                            if st.session_state['restaurants_list'] else None
+                        )
+                    st.rerun()
 
         # Wire up card clicks to trigger the corresponding Select button
         components.html("""
@@ -924,7 +922,7 @@ with tab_images:
     if not restaurant_name:
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Upload Images for {restaurant_name}")
+        st.header(f"Upload Images for {restaurant_name.replace('_', ' ')}")
 
         uploaded_files = {}
         for i, (name, header, description) in enumerate(fields):
