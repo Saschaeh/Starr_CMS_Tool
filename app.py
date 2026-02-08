@@ -1359,6 +1359,7 @@ with tab_copy:
                 value=st.session_state[section_key],
                 key=section_key,
                 height=120,
+                placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
                 label_visibility="collapsed"
             )
 
@@ -1412,6 +1413,7 @@ with tab_copy:
                 value=st.session_state[section_key],
                 key=section_key,
                 height=text_height,
+                placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
                 label_visibility="collapsed"
             )
 
