@@ -367,7 +367,7 @@ img { border-radius: 0 !important; }
 .starr-header {
     background: linear-gradient(135deg, #031E41 0%, #0A3366 100%);
     padding: 1.5rem 2rem;
-    margin: 5rem -1rem 1.5rem -1rem;
+    margin: 8rem -1rem 1.5rem -1rem;
     position: relative;
     border-bottom: 3px solid #C5A258;
 }
@@ -392,7 +392,7 @@ img { border-radius: 0 !important; }
     bottom: 0.5rem;
     right: 1rem;
     color: #C5A258;
-    font-size: 0.65rem;
+    font-size: 0.8rem;
     letter-spacing: 0.5px;
     font-weight: 400;
 }
@@ -709,7 +709,7 @@ st.markdown("""
 <div class="starr-header">
     <h1>Starr CMS Content Manager</h1>
     <div class="starr-subtitle">Restaurant Content Management System</div>
-    <div class="made-tooled">Made{Tooled}</div>
+    <div class="made-tooled">Made{<em>Tooled</em>}</div>
 </div>
 """, unsafe_allow_html=True)
 
