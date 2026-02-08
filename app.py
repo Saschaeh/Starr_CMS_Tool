@@ -367,7 +367,7 @@ img { border-radius: 0 !important; }
 .starr-header {
     background: linear-gradient(135deg, #031E41 0%, #0A3366 100%);
     padding: 1.5rem 2rem;
-    margin: 0 -1rem 1.5rem -1rem;
+    margin: 1rem -1rem 1.5rem -1rem;
     border-bottom: 3px solid #C5A258;
 }
 .starr-header h1 {
@@ -862,26 +862,14 @@ with tab_restaurants:
                         st.rerun()
                 with btn_del:
                     if st.button("Delete", key=f"delete_{rest_name}"):
-                        st.session_state[f"confirm_delete_{rest_name}"] = True
-
-                if st.session_state.get(f"confirm_delete_{rest_name}"):
-                    st.warning(f"Delete **{rest_name}** and all its images/copy? This cannot be undone.")
-                    col_yes, col_no = st.columns(2)
-                    with col_yes:
-                        if st.button("Confirm Delete", key=f"confirm_del_yes_{rest_name}"):
-                            db.delete_restaurant(rest_name)
-                            st.session_state['restaurants_list'].remove(rest_name)
-                            if st.session_state.get('restaurant_name_cleaned') == rest_name:
-                                st.session_state['restaurant_name_cleaned'] = (
-                                    st.session_state['restaurants_list'][0]
-                                    if st.session_state['restaurants_list'] else None
-                                )
-                            st.session_state.pop(f"confirm_delete_{rest_name}", None)
-                            st.rerun()
-                    with col_no:
-                        if st.button("Cancel", key=f"confirm_del_no_{rest_name}"):
-                            st.session_state.pop(f"confirm_delete_{rest_name}", None)
-                            st.rerun()
+                        db.delete_restaurant(rest_name)
+                        st.session_state['restaurants_list'].remove(rest_name)
+                        if st.session_state.get('restaurant_name_cleaned') == rest_name:
+                            st.session_state['restaurant_name_cleaned'] = (
+                                st.session_state['restaurants_list'][0]
+                                if st.session_state['restaurants_list'] else None
+                            )
+                        st.rerun()
     else:
         st.info("No restaurants added yet. Create one above!")
 
@@ -1202,28 +1190,12 @@ with tab_copy:
             with col_reset:
                 if st.button("Reset to Default"):
                     st.session_state['copy_instructions'] = DEFAULT_COPY_INSTRUCTIONS
-                    st.session_state.pop('confirm_save_master', None)
                     st.rerun()
             with col_save:
-                if st.button("Save As Master", type="primary"):
-                    st.session_state['confirm_save_master'] = True
-
-            if st.session_state.get('confirm_save_master'):
-                st.warning(
-                    "This will save the current instructions as the **default prompt for all restaurants** "
-                    "going forward. The previous master instructions will be overwritten."
-                )
-                col_yes, col_no = st.columns(2)
-                with col_yes:
-                    if st.button("Confirm Save", key="confirm_master_yes"):
-                        save_master_instructions(st.session_state['copy_instructions'])
-                        st.session_state.pop('confirm_save_master', None)
-                        st.success("Saved as new master instructions.")
-                        st.rerun()
-                with col_no:
-                    if st.button("Cancel", key="confirm_master_no"):
-                        st.session_state.pop('confirm_save_master', None)
-                        st.rerun()
+                if st.button("Save As Master"):
+                    save_master_instructions(st.session_state['copy_instructions'])
+                    st.success("Saved as new master instructions.")
+                    st.rerun()
 
         if generate_all:
             if not stored_url.strip():
