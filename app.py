@@ -392,7 +392,7 @@ img { border-radius: 0 !important; }
     position: absolute;
     bottom: 0.5rem;
     right: 1rem;
-    color: rgba(255,255,255,0.45);
+    color: #FFFFFF;
     font-size: 0.8rem;
     letter-spacing: 0.5px;
     font-weight: 400;
