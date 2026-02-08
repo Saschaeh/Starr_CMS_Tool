@@ -597,12 +597,14 @@ hr {
     border: 1px solid #E8E5DE;
     border-radius: 6px;
     padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
     transition: border-color 0.2s, box-shadow 0.2s;
+    cursor: pointer;
 }
 .restaurant-row:hover {
     border-color: #C5A258;
     box-shadow: 0 1px 4px rgba(3, 30, 65, 0.08);
+    background: #F8F6F1;
 }
 .restaurant-row.active {
     border-left: 4px solid #C5A258;
@@ -825,7 +827,7 @@ with tab_restaurants:
 
     if st.session_state['restaurants_list']:
         for rest_name in st.session_state['restaurants_list']:
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns([4, 1])
             with col1:
                 # Count uploaded images
                 image_count = 0
@@ -866,22 +868,21 @@ with tab_restaurants:
                 </div>
                 """, unsafe_allow_html=True)
 
+                if st.button("Select", key=f"select_{rest_name}", use_container_width=True):
+                    st.session_state['restaurant_name_cleaned'] = rest_name
+                    st.rerun()
+
             with col2:
-                btn_sel, btn_del = st.columns(2)
-                with btn_sel:
-                    if st.button("Select", key=f"select_{rest_name}"):
-                        st.session_state['restaurant_name_cleaned'] = rest_name
-                        st.rerun()
-                with btn_del:
-                    if st.button("Delete", key=f"delete_{rest_name}"):
-                        db.delete_restaurant(rest_name)
-                        st.session_state['restaurants_list'].remove(rest_name)
-                        if st.session_state.get('restaurant_name_cleaned') == rest_name:
-                            st.session_state['restaurant_name_cleaned'] = (
-                                st.session_state['restaurants_list'][0]
-                                if st.session_state['restaurants_list'] else None
-                            )
-                        st.rerun()
+                st.write("")  # Spacer to align with card
+                if st.button("Delete", key=f"delete_{rest_name}"):
+                    db.delete_restaurant(rest_name)
+                    st.session_state['restaurants_list'].remove(rest_name)
+                    if st.session_state.get('restaurant_name_cleaned') == rest_name:
+                        st.session_state['restaurant_name_cleaned'] = (
+                            st.session_state['restaurants_list'][0]
+                            if st.session_state['restaurants_list'] else None
+                        )
+                    st.rerun()
     else:
         st.info("No restaurants added yet. Create one above!")
 
