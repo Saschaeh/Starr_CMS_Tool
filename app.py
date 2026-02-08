@@ -519,6 +519,9 @@ img { border-radius: 0 !important; }
     font-size: 1.15rem !important;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #C5A258;
+    margin-bottom: 0.75rem !important;
 }
 
 
@@ -749,36 +752,37 @@ if 'hf_api_token' not in st.session_state:
 # Load persisted data from SQLite on first run of this session
 if 'db_loaded' not in st.session_state:
     st.session_state['db_loaded'] = True
-    saved_restaurants = db.get_all_restaurants()
-    st.session_state['restaurants_list'] = [r['name'] for r in saved_restaurants]
+    with st.spinner("Loading restaurant data..."):
+        saved_restaurants = db.get_all_restaurants()
+        st.session_state['restaurants_list'] = [r['name'] for r in saved_restaurants]
 
-    # Restore URLs, copy, alt text, and overlay settings per restaurant
-    for r in saved_restaurants:
-        rname = r['name']
-        if r['website_url']:
-            st.session_state[f"{rname}_website_url"] = r['website_url']
+        # Restore URLs, copy, alt text, and overlay settings per restaurant
+        for r in saved_restaurants:
+            rname = r['name']
+            if r['website_url']:
+                st.session_state[f"{rname}_website_url"] = r['website_url']
 
-        # Restore copy sections
-        copy_data = db.get_copy_for_restaurant(rname)
-        for sec_id, content in copy_data.items():
-            st.session_state[f"{rname}_copy_{sec_id}"] = content
+            # Restore copy sections
+            copy_data = db.get_copy_for_restaurant(rname)
+            for sec_id, content in copy_data.items():
+                st.session_state[f"{rname}_copy_{sec_id}"] = content
 
-        # Restore image metadata (alt text, overlay)
-        img_data = db.get_images_for_restaurant(rname)
-        for field_name, info in img_data.items():
-            if info['alt_text']:
-                st.session_state[f"{field_name}_alt"] = info['alt_text']
-            if field_name in ('Hero_Image_Desktop', 'Hero_Image_Mobile'):
-                st.session_state[f"{field_name}_opacity"] = info['overlay_opacity']
-            # Mark that a persisted image exists in the database
-            if info.get('has_image'):
-                st.session_state[f"{rname}_{field_name}_persisted"] = True
+            # Restore image metadata (alt text, overlay)
+            img_data = db.get_images_for_restaurant(rname)
+            for field_name, info in img_data.items():
+                if info['alt_text']:
+                    st.session_state[f"{field_name}_alt"] = info['alt_text']
+                if field_name in ('Hero_Image_Desktop', 'Hero_Image_Mobile'):
+                    st.session_state[f"{field_name}_opacity"] = info['overlay_opacity']
+                # Mark that a persisted image exists in the database
+                if info.get('has_image'):
+                    st.session_state[f"{rname}_{field_name}_persisted"] = True
 
-    # Select first restaurant if none selected
-    if st.session_state['restaurants_list']:
-        st.session_state.setdefault('restaurant_name_cleaned', st.session_state['restaurants_list'][0])
-    else:
-        st.session_state.setdefault('restaurant_name_cleaned', None)
+        # Select first restaurant if none selected
+        if st.session_state['restaurants_list']:
+            st.session_state.setdefault('restaurant_name_cleaned', st.session_state['restaurants_list'][0])
+        else:
+            st.session_state.setdefault('restaurant_name_cleaned', None)
 
 if 'restaurants_list' not in st.session_state:
     st.session_state['restaurants_list'] = []
@@ -848,9 +852,7 @@ with tab_restaurants:
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
                 st.rerun()
 
-    st.markdown("---")
     st.subheader("Restaurants Content Progress")
-    st.markdown('<hr style="border:none;border-top:1.5px solid #C5A258;margin:0 0 0.75rem 0">', unsafe_allow_html=True)
 
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
@@ -1114,12 +1116,13 @@ with tab_images:
                     img_bytes = img_buffer.getvalue()
 
                     if is_fresh_upload:
-                        db.save_image(
-                            restaurant_name, name, img_bytes,
-                            uploaded_file.name,
-                            alt_text=st.session_state.get(f"{name}_alt", ''),
-                            overlay_opacity=st.session_state.get(f"{name}_opacity", 40)
-                        )
+                        with st.spinner("Saving image..."):
+                            db.save_image(
+                                restaurant_name, name, img_bytes,
+                                uploaded_file.name,
+                                alt_text=st.session_state.get(f"{name}_alt", ''),
+                                overlay_opacity=st.session_state.get(f"{name}_opacity", 40)
+                            )
                         st.session_state[persisted_flag_key] = True
 
                     # Download button for individual image
@@ -1139,7 +1142,8 @@ with tab_images:
                     # Auto-generate on first upload if API key is set and alt text is empty
                     auto_key = f"{name}_auto_generated"
                     if is_fresh_upload and st.session_state.get('hf_api_token') and not st.session_state[alt_key] and not st.session_state.get(auto_key):
-                        alt_text = generate_alt_text(resized_img)
+                        with st.spinner("Generating alt text..."):
+                            alt_text = generate_alt_text(resized_img)
                         if alt_text:
                             st.session_state[alt_key] = alt_text
                             st.session_state[auto_key] = True
@@ -1170,43 +1174,44 @@ with tab_images:
         if any(uploaded_files.values()):
             st.markdown("---")
             if st.button("Download All Resized Images"):
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-                    for name, file in uploaded_files.items():
-                        if file:
-                            target_width, target_height, _ = image_mappings[name]
-                            img = Image.open(file)
-                            
-                            try:
-                                exif = img._getexif()
-                                if exif and 274 in exif:
-                                    orientation = exif[274]
-                                    if orientation == 3:
-                                        img = img.rotate(180, expand=True)
-                                    elif orientation == 6:
-                                        img = img.rotate(-90, expand=True)
-                                    elif orientation == 8:
-                                        img = img.rotate(90, expand=True)
-                            except:
-                                pass
-                            
-                            resized_img = resize_and_crop(img, target_width, target_height)
-                            
-                            if name in ['Hero_Image_Desktop', 'Hero_Image_Mobile']:
-                                opacity_key = f"{name}_opacity"
-                                overlay_value = st.session_state.get(opacity_key, 40)
-                                if overlay_value > 0:
-                                    resized_img = apply_black_overlay(resized_img, overlay_value)
-                            
-                            ext = file.name.split('.')[-1].lower()
-                            format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
-                            img_format = format_map.get(ext, 'JPEG')
-                            new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
-                            
-                            img_buffer = io.BytesIO()
-                            resized_img.save(img_buffer, format=img_format, quality=95)
-                            img_buffer.seek(0)
-                            zip_file.writestr(f"Resized/{new_filename}", img_buffer.read())
+                with st.spinner("Preparing ZIP file..."):
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                        for name, file in uploaded_files.items():
+                            if file:
+                                target_width, target_height, _ = image_mappings[name]
+                                img = Image.open(file)
+
+                                try:
+                                    exif = img._getexif()
+                                    if exif and 274 in exif:
+                                        orientation = exif[274]
+                                        if orientation == 3:
+                                            img = img.rotate(180, expand=True)
+                                        elif orientation == 6:
+                                            img = img.rotate(-90, expand=True)
+                                        elif orientation == 8:
+                                            img = img.rotate(90, expand=True)
+                                except:
+                                    pass
+
+                                resized_img = resize_and_crop(img, target_width, target_height)
+
+                                if name in ['Hero_Image_Desktop', 'Hero_Image_Mobile']:
+                                    opacity_key = f"{name}_opacity"
+                                    overlay_value = st.session_state.get(opacity_key, 40)
+                                    if overlay_value > 0:
+                                        resized_img = apply_black_overlay(resized_img, overlay_value)
+
+                                ext = file.name.split('.')[-1].lower()
+                                format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
+                                img_format = format_map.get(ext, 'JPEG')
+                                new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
+
+                                img_buffer = io.BytesIO()
+                                resized_img.save(img_buffer, format=img_format, quality=95)
+                                img_buffer.seek(0)
+                                zip_file.writestr(f"Resized/{new_filename}", img_buffer.read())
                 
                 zip_buffer.seek(0)
                 st.download_button(
