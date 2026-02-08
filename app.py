@@ -1241,17 +1241,11 @@ with tab_copy:
         stored_url = st.session_state.get(url_key, "")
 
         # --- URL + Generate ---
-        if stored_url:
-            st.markdown(f'<div class="field-label">Source URL: <span style="font-weight:400;color:#5A5A6E">{stored_url}</span></div>', unsafe_allow_html=True)
-        else:
-            st.info("Add a website URL for this restaurant in the Restaurants tab to enable copy generation.")
-
-        col_gen, col_url_edit = st.columns([1, 3])
-        with col_gen:
-            generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
+        st.markdown('<div class="field-label">Website URL</div>', unsafe_allow_html=True)
+        col_url_edit, col_gen = st.columns([3, 1])
         with col_url_edit:
             new_url = st.text_input(
-                "Update URL",
+                "Website URL",
                 value=stored_url,
                 placeholder="https://www.restaurant.com",
                 key=f"{url_key}_copy_input",
@@ -1261,6 +1255,12 @@ with tab_copy:
                 st.session_state[url_key] = new_url
                 stored_url = new_url
                 db.update_restaurant_url(restaurant_name, new_url)
+        with col_gen:
+            st.markdown("<div style='margin-bottom:1px'>&nbsp;</div>", unsafe_allow_html=True)
+            generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
+
+        if not stored_url:
+            st.info("Enter a website URL above to enable copy generation.")
 
         # --- Edit Copy Instructions ---
         if 'copy_instructions' not in st.session_state:
