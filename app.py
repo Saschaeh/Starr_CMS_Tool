@@ -521,7 +521,7 @@ img { border-radius: 0 !important; }
     letter-spacing: 0.5px;
     padding-bottom: 0.35rem;
     border-bottom: 1px solid #C5A258;
-    margin-bottom: 1.25rem !important;
+    margin-bottom: 2rem !important;
 }
 
 
