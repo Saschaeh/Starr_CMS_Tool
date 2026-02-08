@@ -776,9 +776,9 @@ if 'db_loaded' not in st.session_state:
             img_data = db.get_images_for_restaurant(rname)
             for field_name, info in img_data.items():
                 if info['alt_text']:
-                    st.session_state[f"{field_name}_alt"] = info['alt_text']
+                    st.session_state[f"{rname}_{field_name}_alt"] = info['alt_text']
                 if field_name in ('Hero_Image_Desktop', 'Hero_Image_Mobile'):
-                    st.session_state[f"{field_name}_opacity"] = info['overlay_opacity']
+                    st.session_state[f"{rname}_{field_name}_opacity"] = info['overlay_opacity']
                 # Mark that a persisted image exists in the database
                 if info.get('has_image'):
                     st.session_state[f"{rname}_{field_name}_persisted"] = True
@@ -876,7 +876,7 @@ with tab_restaurants:
                 # Count completed alt texts
                 alt_count = 0
                 for field_name, _, _ in fields:
-                    alt_key = f"{field_name}_alt"
+                    alt_key = f"{rest_name}_{field_name}_alt"
                     if alt_key in st.session_state and st.session_state[alt_key].strip():
                         alt_count += 1
 
@@ -1069,7 +1069,7 @@ with tab_images:
 
                     # Hero images: show overlay slider
                     if name in ['Hero_Image_Desktop', 'Hero_Image_Mobile']:
-                        opacity_key = f"{name}_opacity"
+                        opacity_key = f"{restaurant_name}_{name}_opacity"
                         if opacity_key not in st.session_state:
                             st.session_state[opacity_key] = 40
 
@@ -1125,8 +1125,8 @@ with tab_images:
                             db.save_image(
                                 restaurant_name, name, img_bytes,
                                 uploaded_file.name,
-                                alt_text=st.session_state.get(f"{name}_alt", ''),
-                                overlay_opacity=st.session_state.get(f"{name}_opacity", 40)
+                                alt_text=st.session_state.get(f"{restaurant_name}_{name}_alt", ''),
+                                overlay_opacity=st.session_state.get(f"{restaurant_name}_{name}_opacity", 40)
                             )
                         st.session_state[persisted_flag_key] = True
 
@@ -1140,12 +1140,12 @@ with tab_images:
                     )
 
                     # Alt text inline
-                    alt_key = f"{name}_alt"
+                    alt_key = f"{restaurant_name}_{name}_alt"
                     if alt_key not in st.session_state:
                         st.session_state[alt_key] = ""
 
                     # Auto-generate on first upload if API key is set and alt text is empty
-                    auto_key = f"{name}_auto_generated"
+                    auto_key = f"{restaurant_name}_{name}_auto_generated"
                     if is_fresh_upload and st.session_state.get('hf_api_token') and not st.session_state[alt_key] and not st.session_state.get(auto_key):
                         with st.spinner("Generating alt text..."):
                             alt_text = generate_alt_text(resized_img)
@@ -1164,8 +1164,8 @@ with tab_images:
                     )
 
                     # Persist alt text if changed
-                    if new_alt != st.session_state.get(f"{name}_alt_prev", ''):
-                        st.session_state[f"{name}_alt_prev"] = new_alt
+                    if new_alt != st.session_state.get(f"{restaurant_name}_{name}_alt_prev", ''):
+                        st.session_state[f"{restaurant_name}_{name}_alt_prev"] = new_alt
                         if has_persisted or is_fresh_upload:
                             db.update_alt_text(restaurant_name, name, new_alt)
 
@@ -1203,7 +1203,7 @@ with tab_images:
                                 resized_img = resize_and_crop(img, target_width, target_height)
 
                                 if name in ['Hero_Image_Desktop', 'Hero_Image_Mobile']:
-                                    opacity_key = f"{name}_opacity"
+                                    opacity_key = f"{restaurant_name}_{name}_opacity"
                                     overlay_value = st.session_state.get(opacity_key, 40)
                                     if overlay_value > 0:
                                         resized_img = apply_black_overlay(resized_img, overlay_value)
