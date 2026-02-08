@@ -607,6 +607,11 @@ button.rest-btn-light:hover {
     background-color: #A0B4C8 !important;
     color: #FFFFFF !important;
 }
+@media (max-width: 640px) {
+    button.rest-btn-light {
+        margin-top: 0.25rem !important;
+    }
+}
 .restaurant-separator {
     border: none;
     border-top: 1px solid #E8E5DE;
