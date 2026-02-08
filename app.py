@@ -591,12 +591,14 @@ hr {
 }
 
 
-/* === RESTAURANT LIST BUTTONS (lighter/subtler) === */
+/* === RESTAURANT LIST BUTTONS (lighter/subtler, half-width, left-aligned) === */
 button.rest-btn-light {
     border-color: #A0B4C8 !important;
     color: #A0B4C8 !important;
     font-weight: 400 !important;
     font-size: 0.8rem !important;
+    width: auto !important;
+    min-width: 0 !important;
 }
 button.rest-btn-light:hover {
     background-color: #A0B4C8 !important;
@@ -823,7 +825,7 @@ with tab_restaurants:
     with col_url:
         restaurant_url_input = st.text_input("Website URL:", placeholder="https://www.restaurant.com")
     with col_add:
-        st.write("")  # Spacer
+        st.markdown("<div style='margin-bottom:1px'>&nbsp;</div>", unsafe_allow_html=True)
         if st.button("Add"):
             if restaurant_input.strip():
                 cleaned_name = re.sub(r'[^a-zA-Z0-9_]', '_', restaurant_input.strip())
@@ -887,10 +889,10 @@ with tab_restaurants:
                 """, unsafe_allow_html=True)
 
             with col2:
-                if st.button("Select", key=f"select_{rest_name}", use_container_width=True):
+                if st.button("Select", key=f"select_{rest_name}"):
                     st.session_state['restaurant_name_cleaned'] = rest_name
                     st.rerun()
-                if st.button("Delete", key=f"delete_{rest_name}", use_container_width=True):
+                if st.button("Delete", key=f"delete_{rest_name}"):
                     db.delete_restaurant(rest_name)
                     st.session_state['restaurants_list'].remove(rest_name)
                     if st.session_state.get('restaurant_name_cleaned') == rest_name:
