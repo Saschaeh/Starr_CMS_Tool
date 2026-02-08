@@ -367,7 +367,7 @@ img { border-radius: 0 !important; }
 .starr-header {
     background: linear-gradient(135deg, #031E41 0%, #0A3366 100%);
     padding: 1.5rem 2rem;
-    margin: 2.5rem -1rem 1.5rem -1rem;
+    margin: 5rem -1rem 1.5rem -1rem;
     position: relative;
     border-bottom: 3px solid #C5A258;
 }
@@ -391,7 +391,7 @@ img { border-radius: 0 !important; }
     position: absolute;
     bottom: 0.5rem;
     right: 1rem;
-    color: rgba(255,255,255,0.3);
+    color: #C5A258;
     font-size: 0.65rem;
     letter-spacing: 0.5px;
     font-weight: 400;
