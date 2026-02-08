@@ -591,6 +591,23 @@ hr {
 }
 
 
+/* === RESTAURANT LIST BUTTONS (lighter/subtler) === */
+button.rest-btn-light {
+    border-color: #A0B4C8 !important;
+    color: #A0B4C8 !important;
+    font-weight: 400 !important;
+    font-size: 0.8rem !important;
+}
+button.rest-btn-light:hover {
+    background-color: #A0B4C8 !important;
+    color: #FFFFFF !important;
+}
+.restaurant-separator {
+    border: none;
+    border-top: 1px solid #E8E5DE;
+    margin: 0.35rem 0;
+}
+
 /* === CUSTOM: RESTAURANT ROW === */
 .restaurant-row {
     background: #FFFFFF;
@@ -883,12 +900,14 @@ with tab_restaurants:
                         )
                     st.rerun()
 
-        # Wire up card clicks to trigger the corresponding Select button
+        # Wire up card clicks, lighten Select/Delete buttons, add separators
         components.html("""
         <script>
         setTimeout(() => {
             const doc = window.parent.document;
             const rows = doc.querySelectorAll('.restaurant-row[data-name]');
+
+            // Wire up card clicks to trigger the corresponding Select button
             rows.forEach((row) => {
                 row.addEventListener('click', function() {
                     const name = this.getAttribute('data-name');
@@ -907,6 +926,33 @@ with tab_restaurants:
                     const selectBtns = Array.from(buttons).filter(b => b.textContent.trim() === 'Select');
                     if (selectBtns[idx]) selectBtns[idx].click();
                 });
+            });
+
+            // Lighten Select/Delete buttons
+            doc.querySelectorAll('button').forEach((btn) => {
+                const txt = btn.textContent.trim();
+                if (txt === 'Select' || txt === 'Delete') {
+                    btn.classList.add('rest-btn-light');
+                }
+            });
+
+            // Add separator lines between restaurant rows
+            rows.forEach((row, i) => {
+                if (i < rows.length - 1) {
+                    const parent = row.closest('[data-testid]');
+                    if (parent) {
+                        const block = parent.closest('[data-testid="stVerticalBlock"]') || parent.parentElement;
+                        if (block && !block.querySelector('.restaurant-separator')) {
+                            // Find the horizontal block (columns wrapper) containing this row
+                            const colWrapper = parent.closest('[data-testid="stHorizontalBlock"]');
+                            if (colWrapper && colWrapper.nextElementSibling) {
+                                const sep = doc.createElement('hr');
+                                sep.className = 'restaurant-separator';
+                                colWrapper.parentNode.insertBefore(sep, colWrapper.nextElementSibling);
+                            }
+                        }
+                    }
+                }
             });
         }, 500);
         </script>
