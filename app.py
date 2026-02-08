@@ -1271,29 +1271,8 @@ with tab_copy:
             # Persist copy text when edited
             db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
 
-            col_copy, col_regen = st.columns([1, 3])
-            with col_copy:
-                if st.session_state[section_key].strip():
-                    copy_button(st.session_state[section_key], f"copy_{section_id}")
-            with col_regen:
-                if st.button(f"Regenerate", key=f"regen_{section_id}"):
-                    if not stored_url:
-                        st.warning("Add a website URL first.")
-                    elif not st.session_state.get('hf_api_token'):
-                        st.error("HF API token not configured.")
-                    else:
-                        with st.spinner(f"Regenerating {section_label}..."):
-                            ok, content, err = scrape_website(stored_url)
-                            if ok:
-                                ok, copy_dict, err = generate_copy(content, restaurant_name, section=section_id, instructions=st.session_state.get('copy_instructions'))
-                                if ok and section_id in copy_dict:
-                                    st.session_state[section_key] = copy_dict[section_id]
-                                    db.save_copy_section(restaurant_name, section_id, copy_dict[section_id])
-                                    st.rerun()
-                                else:
-                                    st.error(err or "Failed to regenerate.")
-                            else:
-                                st.error(err)
+            if st.session_state[section_key].strip():
+                copy_button(st.session_state[section_key], f"copy_{section_id}")
 
             st.markdown("---")
 
@@ -1345,28 +1324,7 @@ with tab_copy:
             # Persist copy text when edited
             db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
 
-            col_copy, col_regen = st.columns([1, 3])
-            with col_copy:
-                if st.session_state[section_key].strip():
-                    copy_button(st.session_state[section_key], f"copy_{section_id}")
-            with col_regen:
-                if st.button(f"Regenerate", key=f"regen_{section_id}"):
-                    if not stored_url:
-                        st.warning("Add a website URL first.")
-                    elif not st.session_state.get('hf_api_token'):
-                        st.error("HF API token not configured.")
-                    else:
-                        with st.spinner(f"Regenerating {section_label}..."):
-                            ok, content, err = scrape_website(stored_url)
-                            if ok:
-                                ok, copy_dict, err = generate_copy(content, restaurant_name, section=section_id, instructions=st.session_state.get('copy_instructions'))
-                                if ok and section_id in copy_dict:
-                                    st.session_state[section_key] = copy_dict[section_id]
-                                    db.save_copy_section(restaurant_name, section_id, copy_dict[section_id])
-                                    st.rerun()
-                                else:
-                                    st.error(err or "Failed to regenerate.")
-                            else:
-                                st.error(err)
+            if st.session_state[section_key].strip():
+                copy_button(st.session_state[section_key], f"copy_{section_id}")
 
             st.markdown("---")
