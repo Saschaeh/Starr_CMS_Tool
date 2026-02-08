@@ -845,7 +845,8 @@ with tab_restaurants:
     st.subheader("Restaurants Content Progress")
 
     if st.session_state['restaurants_list']:
-        for rest_name in st.session_state['restaurants_list']:
+        rest_list = st.session_state['restaurants_list']
+        for rest_idx, rest_name in enumerate(rest_list):
             col1, col2 = st.columns([3, 1])
             with col1:
                 # Count uploaded images
@@ -902,7 +903,11 @@ with tab_restaurants:
                         )
                     st.rerun()
 
-        # Wire up card clicks, lighten Select/Delete buttons, add separators
+            # Divider between restaurant rows
+            if rest_idx < len(rest_list) - 1:
+                st.markdown('<hr class="restaurant-separator">', unsafe_allow_html=True)
+
+        # Wire up card clicks, lighten Select/Delete buttons
         components.html("""
         <script>
         setTimeout(() => {
@@ -938,24 +943,6 @@ with tab_restaurants:
                 }
             });
 
-            // Add separator lines between restaurant rows
-            rows.forEach((row, i) => {
-                if (i < rows.length - 1) {
-                    const parent = row.closest('[data-testid]');
-                    if (parent) {
-                        const block = parent.closest('[data-testid="stVerticalBlock"]') || parent.parentElement;
-                        if (block && !block.querySelector('.restaurant-separator')) {
-                            // Find the horizontal block (columns wrapper) containing this row
-                            const colWrapper = parent.closest('[data-testid="stHorizontalBlock"]');
-                            if (colWrapper && colWrapper.nextElementSibling) {
-                                const sep = doc.createElement('hr');
-                                sep.className = 'restaurant-separator';
-                                colWrapper.parentNode.insertBefore(sep, colWrapper.nextElementSibling);
-                            }
-                        }
-                    }
-                }
-            });
         }, 500);
         </script>
         """, height=0)
@@ -1226,12 +1213,12 @@ with tab_images:
 # TAB 3: COPY & METADATA
 # ==============================================================================
 with tab_copy:
-    st.header("Copy & Metadata")
-
     restaurant_name = st.session_state.get('restaurant_name_cleaned')
     if not restaurant_name:
+        st.header("Copy & Metadata")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
+        st.header(f"Copy & Metadata for {restaurant_name.replace('_', ' ')}")
         url_key = f"{restaurant_name}_website_url"
         stored_url = st.session_state.get(url_key, "")
 
