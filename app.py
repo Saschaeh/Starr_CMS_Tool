@@ -607,12 +607,16 @@ button.rest-btn-light:hover {
 .restaurant-separator {
     border: none;
     border-top: 1px solid #E8E5DE;
-    margin: -0.35rem 0;
+    max-width: 750px;
+    margin: -0.35rem auto;
 }
 
-/* Vertically center card and buttons in restaurant rows */
+/* Center restaurant rows horizontally and vertically align columns */
 [data-testid="stHorizontalBlock"]:has(.restaurant-row) {
     align-items: center !important;
+    max-width: 750px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* === CUSTOM: RESTAURANT ROW === */
