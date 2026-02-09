@@ -171,13 +171,40 @@ def generate_alt_text(pil_image):
 # WEBSITE SCRAPING
 # ============================================================================
 
+def _fetch_page_text(url, headers):
+    """Fetch a single page and return cleaned text, or empty string on failure."""
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except Exception:
+        return ""
+    soup = BeautifulSoup(response.content, 'html.parser')
+    for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header']):
+        tag.decompose()
+    content = soup.find('main') or soup.find('article') or soup.find('body')
+    if not content:
+        return ""
+    text = content.get_text(separator=' ', strip=True)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+# Subpage path keywords to look for when scraping restaurant sites
+_SUBPAGE_KEYWORDS = [
+    'about', 'concept', 'story', 'menu', 'cuisine', 'food',
+    'group', 'private', 'dining', 'event', 'party', 'parties',
+    'reserve', 'reservation', 'chef',
+]
+
+
 def scrape_website(url):
-    """Scrape text content from a restaurant website URL."""
+    """Scrape text content from a restaurant website and key subpages."""
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
 
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+    # Fetch the main page
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
@@ -191,24 +218,45 @@ def scrape_website(url):
 
     soup = BeautifulSoup(response.content, 'html.parser')
 
-    # Remove non-content elements
+    # Discover relevant subpage links on the same domain
+    from urllib.parse import urlparse, urljoin
+    base_domain = urlparse(url).netloc
+    subpage_urls = set()
+    for a_tag in soup.find_all('a', href=True):
+        href = a_tag['href']
+        full_url = urljoin(url, href)
+        parsed = urlparse(full_url)
+        if parsed.netloc != base_domain:
+            continue
+        path_lower = parsed.path.lower().strip('/')
+        if path_lower and any(kw in path_lower for kw in _SUBPAGE_KEYWORDS):
+            clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            subpage_urls.add(clean_url)
+
+    # Extract main page text
     for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header']):
         tag.decompose()
-
-    # Try semantic content areas first, fall back to body
     content = soup.find('main') or soup.find('article') or soup.find('body')
-    if not content:
-        return False, "", "Could not extract text from website."
+    main_text = ""
+    if content:
+        main_text = content.get_text(separator=' ', strip=True)
+        main_text = re.sub(r'\s+', ' ', main_text).strip()
 
-    text = content.get_text(separator=' ', strip=True)
-    # Clean up whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    # Scrape subpages and combine
+    all_text_parts = [f"[HOME PAGE]\n{main_text}"] if main_text else []
+    for sub_url in sorted(subpage_urls)[:8]:  # Limit to 8 subpages
+        page_text = _fetch_page_text(sub_url, headers)
+        if page_text and len(page_text) > 30:
+            path_label = urlparse(sub_url).path.strip('/').upper().replace('-', ' ')
+            all_text_parts.append(f"[{path_label}]\n{page_text}")
 
-    if len(text) < 50:
+    combined_text = "\n\n".join(all_text_parts)
+
+    if len(combined_text) < 50:
         return False, "", "Website had very little text content. Try a different page or enter copy manually."
 
     # Truncate to stay within LLM token limits
-    return True, text[:4000], ""
+    return True, combined_text[:8000], ""
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
