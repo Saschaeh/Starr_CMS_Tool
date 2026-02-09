@@ -1116,10 +1116,7 @@ with tab_images:
 
                     # Save processed image to disk on fresh upload
                     img_buffer = io.BytesIO()
-                    save_kwargs = {'format': img_format, 'quality': 95, 'optimize': True}
-                    if img_format == 'JPEG':
-                        save_kwargs['progressive'] = True
-                    resized_img.save(img_buffer, **save_kwargs)
+                    resized_img.save(img_buffer, format=img_format, quality=95)
                     img_buffer.seek(0)
                     img_bytes = img_buffer.getvalue()
 
@@ -1217,10 +1214,7 @@ with tab_images:
                                 new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
 
                                 img_buffer = io.BytesIO()
-                                save_kwargs = {'format': img_format, 'quality': 95, 'optimize': True}
-                                if img_format == 'JPEG':
-                                    save_kwargs['progressive'] = True
-                                resized_img.save(img_buffer, **save_kwargs)
+                                resized_img.save(img_buffer, format=img_format, quality=95)
                                 img_buffer.seek(0)
                                 zip_file.writestr(f"Resized/{new_filename}", img_buffer.read())
                 
