@@ -949,10 +949,11 @@ with tab_restaurants:
                 image_count = 0
                 for field_name, _, _ in fields:
                     uploader_key = f"{rest_name}_{field_name}"
-                    if uploader_key in st.session_state:
-                        val = st.session_state.get(uploader_key)
-                        if val is not None:
-                            image_count += 1
+                    persisted_key = f"{rest_name}_{field_name}_persisted"
+                    has_upload = st.session_state.get(uploader_key) is not None
+                    has_persisted = st.session_state.get(persisted_key, False)
+                    if has_upload or has_persisted:
+                        image_count += 1
 
                 # Count completed alt texts
                 alt_count = 0
