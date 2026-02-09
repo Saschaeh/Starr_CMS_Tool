@@ -258,13 +258,18 @@ def scrape_website(url):
         main_text = content.get_text(separator=' ', strip=True)
         main_text = re.sub(r'\s+', ' ', main_text).strip()
 
-    # Scrape subpages and combine
-    all_text_parts = [f"[HOME PAGE]\n{main_text}"] if main_text else []
+    # Scrape subpages and combine (subpages first so factual details
+    # like group dining numbers aren't truncated by the token limit)
+    subpage_parts = []
     for sub_url in sorted(subpage_urls)[:10]:
         page_text = _fetch_page_text(sub_url, headers)
         if page_text and len(page_text) > 30:
             path_label = urlparse(sub_url).path.strip('/').upper().replace('-', ' ')
-            all_text_parts.append(f"[{path_label}]\n{page_text}")
+            subpage_parts.append(f"[{path_label}]\n{page_text}")
+
+    all_text_parts = subpage_parts
+    if main_text:
+        all_text_parts.append(f"[HOME PAGE]\n{main_text}")
 
     combined_text = "\n\n".join(all_text_parts)
 
@@ -299,7 +304,7 @@ Sections to generate:
 2. **The Cuisine**
    Describe the cuisine in a tone and style matching the source site's analyzed voice (e.g., evocative and refined if that's what you observe), emphasizing key dishes, cooking styles, ingredients, and any fusion or innovative elements based on menu or description pages. If no explicit details exist, create an original description based on the site's tone and inferred elements (e.g., from menu items or photos), erring on the shorter word count of around 30-50 words.
 3. **Group Dining**
-   Summarize any available details on group dining, private events, or large parties in a straightforward, matter-of-fact style from the source site's relevant page (e.g., private dining or events). If no details exist, use a generic placeholder like: "For groups or private events, please contact us directly to discuss customized options and availability."
+   Summarize group dining, private events, or large party details in a straightforward, matter-of-fact style. CRITICAL: If the source text contains specific seating capacities or guest counts, you MUST copy those exact numbers verbatim. Do NOT paraphrase, round, or estimate any numbers. If no group dining details exist in the source, use exactly: "For groups or private events, please contact us directly to discuss customized options and availability."
 
 Also write on brand and SEO friendly Website Title and Description meta tags.
 
@@ -347,7 +352,7 @@ def generate_copy(website_text, restaurant_name, section=None, instructions=None
         prompt = (
             f"You are a professional copywriter for upscale restaurants.\n\n"
             f"INSTRUCTIONS:\n{instructions}\n\n"
-            f"Based on this website content for {restaurant_name}:\n{website_text[:3000]}\n\n"
+            f"Based on this website content for {restaurant_name}:\n{website_text[:6000]}\n\n"
             f"Write a {label} ({desc}). STRICT word limit: {wmin}-{wmax} words.\n"
             f"Return ONLY the copy text, nothing else."
         )
@@ -361,7 +366,7 @@ def generate_copy(website_text, restaurant_name, section=None, instructions=None
         prompt = (
             f"You are a professional copywriter for upscale restaurants.\n\n"
             f"INSTRUCTIONS:\n{instructions}\n\n"
-            f"Based on this website content for {restaurant_name}:\n{website_text[:3000]}\n\n"
+            f"Based on this website content for {restaurant_name}:\n{website_text[:6000]}\n\n"
             f"Generate marketing copy for these {len(COPY_SECTIONS)} sections:\n{section_list}\n\n"
             f"Format your response EXACTLY as:\n"
             f"[THE_CONCEPT]\nyour text\n[/THE_CONCEPT]\n\n"
