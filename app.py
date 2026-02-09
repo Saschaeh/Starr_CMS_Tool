@@ -752,6 +752,7 @@ button.rest-btn-light:hover {
     margin-right: 0.4rem;
 }
 .progress-pill.images { background: #e8eef5; color: #0A3366; }
+.progress-pill.chef   { background: #f0ecf5; color: #6B5B8D; }
 .progress-pill.alt    { background: #e8f5ec; color: #2D7D46; }
 .progress-pill.copy   { background: #fdf3e0; color: #B8860B; }
 
@@ -945,15 +946,20 @@ with tab_restaurants:
         for rest_idx, rest_name in enumerate(rest_list):
             col1, col2 = st.columns([3, 1])
             with col1:
-                # Count uploaded images
+                # Count uploaded images (required vs optional chef)
                 image_count = 0
+                chef_count = 0
+                _CHEF_FIELDS = {'Chef_1', 'Chef_2', 'Chef_3'}
                 for field_name, _, _ in fields:
                     uploader_key = f"{rest_name}_{field_name}"
                     persisted_key = f"{rest_name}_{field_name}_persisted"
                     has_upload = st.session_state.get(uploader_key) is not None
                     has_persisted = st.session_state.get(persisted_key, False)
                     if has_upload or has_persisted:
-                        image_count += 1
+                        if field_name in _CHEF_FIELDS:
+                            chef_count += 1
+                        else:
+                            image_count += 1
 
                 # Count completed alt texts
                 alt_count = 0
@@ -979,7 +985,8 @@ with tab_restaurants:
                     <div class="rest-name">{star}{display_name}</div>
                     {url_html}
                     <div class="rest-stats">
-                        <span class="progress-pill images">Images: {image_count}/11</span>
+                        <span class="progress-pill images">Images: {image_count}/8</span>
+                        <span class="progress-pill chef">Chef: {chef_count}/3</span>
                         <span class="progress-pill alt">Alt Text: {alt_count}</span>
                         <span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>
                     </div>
