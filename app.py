@@ -829,9 +829,9 @@ fields = [
     ('Cuisine_1', "First Cuisine Image (Vertical)", "Target: 529x767px — Vertical image, ~2:3 aspect ratio."),
     ('Cuisine_2', "Second Cuisine Image (Landscape)", "Target: 696x606px — Landscape image, ~1.15:1 aspect ratio."),
     ('Menu_1', "Menu Image (Wide Horizontal)", "Target: 1321x558px — Wide horizontal image, ~2.4:1 aspect ratio."),
-    ('Chef_1', "First Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
-    ('Chef_2', "Second Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
-    ('Chef_3', "Third Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio.")
+    ('Chef_1', "First Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
+    ('Chef_2', "Second Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
+    ('Chef_3', "Third Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio.")
 ]
 
 # ============================================================================
@@ -987,6 +987,10 @@ with tab_images:
 
         uploaded_files = {}
         for i, (name, header, description) in enumerate(fields):
+            if name == 'Chef_1':
+                st.markdown("---")
+                st.subheader("Optional Chef Pictures")
+
             with st.container():
                 st.markdown(f"""
                 <div class="image-field-card">
