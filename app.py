@@ -174,7 +174,7 @@ def generate_alt_text(pil_image):
 def _fetch_page_text(url, headers):
     """Fetch a single page and return cleaned text, or empty string on failure."""
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
     except Exception:
         return ""
@@ -195,9 +195,19 @@ _SUBPAGE_KEYWORDS = [
     'reserve', 'reservation', 'chef',
 ]
 
+# Common restaurant subpage paths to always try (single-page sites often
+# don't link to these in standard <a> tags, using anchor links instead)
+_COMMON_SUBPATHS = [
+    '/about/', '/about-us/', '/group-dining/', '/private-dining/',
+    '/private-events/', '/menu/', '/events/', '/the-cuisine/',
+    '/the-concept/', '/chef/',
+]
+
 
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages."""
+    from urllib.parse import urlparse, urljoin
+
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
 
@@ -217,14 +227,15 @@ def scrape_website(url):
         return False, "", "Could not fetch website. Please check the URL and try again."
 
     soup = BeautifulSoup(response.content, 'html.parser')
+    parsed_base = urlparse(response.url)  # Use final URL after redirects
+    base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
+    base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
-    from urllib.parse import urlparse, urljoin
-    base_domain = urlparse(url).netloc
     subpage_urls = set()
     for a_tag in soup.find_all('a', href=True):
         href = a_tag['href']
-        full_url = urljoin(url, href)
+        full_url = urljoin(response.url, href)
         parsed = urlparse(full_url)
         if parsed.netloc != base_domain:
             continue
@@ -232,6 +243,11 @@ def scrape_website(url):
         if path_lower and any(kw in path_lower for kw in _SUBPAGE_KEYWORDS):
             clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
             subpage_urls.add(clean_url)
+
+    # Also try common restaurant subpaths by convention (single-page sites
+    # often use anchor links in nav, so these pages won't be discovered above)
+    for subpath in _COMMON_SUBPATHS:
+        subpage_urls.add(base_url + subpath)
 
     # Extract main page text
     for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header']):
@@ -244,7 +260,7 @@ def scrape_website(url):
 
     # Scrape subpages and combine
     all_text_parts = [f"[HOME PAGE]\n{main_text}"] if main_text else []
-    for sub_url in sorted(subpage_urls)[:8]:  # Limit to 8 subpages
+    for sub_url in sorted(subpage_urls)[:10]:
         page_text = _fetch_page_text(sub_url, headers)
         if page_text and len(page_text) > 30:
             path_label = urlparse(sub_url).path.strip('/').upper().replace('-', ' ')
@@ -294,6 +310,7 @@ Guidelines:
 - Do not use these dashes in the copy: "-"
 - Never speak in first person.
 - In Group Dining section you do not need to add contact details or email.
+- IMPORTANT: Never invent, approximate, or round any numbers. If the source text states specific figures (seating capacity, guest counts, square footage, etc.), use exactly those numbers. If the source does not provide specific numbers, omit them entirely rather than guessing.
 """
 
 MASTER_INSTRUCTIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'master_copy_instructions.json')
