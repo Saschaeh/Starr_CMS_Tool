@@ -1154,9 +1154,16 @@ with tab_images:
                     if alt_key not in st.session_state:
                         st.session_state[alt_key] = ""
 
-                    # Auto-generate on first upload if API key is set and alt text is empty
+                    # Auto-generate alt text when a new/different image is uploaded
                     auto_key = f"{restaurant_name}_{name}_auto_generated"
-                    if is_fresh_upload and st.session_state.get('hf_api_token') and not st.session_state[alt_key] and not st.session_state.get(auto_key):
+                    alt_source_key = f"{restaurant_name}_{name}_alt_source"
+                    if is_fresh_upload and uploaded_file:
+                        file_fingerprint = f"{uploaded_file.name}_{uploaded_file.size}"
+                        if file_fingerprint != st.session_state.get(alt_source_key, ''):
+                            st.session_state[alt_source_key] = file_fingerprint
+                            st.session_state.pop(auto_key, None)
+
+                    if is_fresh_upload and st.session_state.get('hf_api_token') and not st.session_state.get(auto_key):
                         with st.spinner("Generating alt text..."):
                             alt_text = generate_alt_text(resized_img)
                         if alt_text:
