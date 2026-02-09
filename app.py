@@ -54,6 +54,17 @@ def resize_and_crop(img, target_width, target_height):
     img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
     return img
 
+def make_image_filename(restaurant, field_name, width, height, ext, alt_text=''):
+    """Generate WordPress-style filename: Restaurant_Field_alt_text_snippet_WxH.ext
+    Alt text is trimmed to ~6 words for SEO-friendly filenames."""
+    if alt_text and alt_text.strip():
+        slug = re.sub(r'[^a-z0-9\s]', '', alt_text.strip().lower())
+        words = slug.split()
+        words = [w for w in words if w not in ('a', 'an', 'the', 'of', 'in', 'on', 'at', 'to', 'and', 'with', 'for', 'is', 'by')]
+        slug = '_'.join(words[:6])
+        return f"{restaurant}_{field_name}_{slug}_{width}x{height}.{ext}"
+    return f"{restaurant}_{field_name}_{width}x{height}.{ext}"
+
 def is_black_and_white(img, threshold=0.1):
     """Check if image is predominantly black and white."""
     img_rgb = img.convert('RGB')
@@ -796,31 +807,31 @@ if 'restaurant_name_cleaned' not in st.session_state:
 
 # Image mappings: (name) -> (target_width, target_height, aspect_ratio)
 image_mappings = {
-    'Hero_Image_Desktop': (1920, 1080, 16/9),
-    'Hero_Image_Mobile': (750, 472, 1.588),
-    'Concept_1': (600, 800, 3/4),
-    'Concept_2': (600, 600, 1/1),
-    'Concept_3': (600, 600, 1/1),
-    'Cuisine_1': (600, 800, 3/4),
-    'Cuisine_2': (600, 600, 1/1),
-    'Menu_1': (1920, 1080, 16/9),
+    'Hero_Image_Desktop': (1920, 1080, 1920/1080),
+    'Hero_Image_Mobile': (750, 472, 750/472),
+    'Concept_1': (696, 825, 696/825),
+    'Concept_2': (525, 544, 525/544),
+    'Concept_3': (696, 693, 696/693),
+    'Cuisine_1': (529, 767, 529/767),
+    'Cuisine_2': (696, 606, 696/606),
+    'Menu_1': (1321, 558, 1321/558),
     'Chef_1': (600, 800, 3/4),
     'Chef_2': (600, 800, 3/4),
     'Chef_3': (600, 800, 3/4),
 }
 
 fields = [
-    ('Hero_Image_Desktop', "Main Desktop Banner Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 16:9."),
-    ('Hero_Image_Mobile', "Main Mobile Banner Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 1.588:1."),
-    ('Concept_1', "First About Us Image (Vertical)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
-    ('Concept_2', "Second About Us Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
-    ('Concept_3', "Third About Us Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
-    ('Cuisine_1', "First Cuisine Image (Vertical)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
-    ('Cuisine_2', "Second Cuisine Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
-    ('Menu_1', "Menu Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 16:9."),
-    ('Chef_1', "First Chef Image (Vertical + Black&White) (Optional)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
-    ('Chef_2', "Second Chef Image (Vertical + Black&White) (Optional)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
-    ('Chef_3', "Third Chef Image (Vertical + Black&White) (Optional)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4.")
+    ('Hero_Image_Desktop', "Main Desktop Banner Image (Horizontal)", "Target: 1920x1080px — Horizontal image, 16:9 aspect ratio."),
+    ('Hero_Image_Mobile', "Main Mobile Banner Image (Horizontal)", "Target: 750x472px — Horizontal image, ~1.59:1 aspect ratio."),
+    ('Concept_1', "First About Us Image (Vertical)", "Target: 696x825px — Vertical image, ~5:6 aspect ratio."),
+    ('Concept_2', "Second About Us Image (Near-Square)", "Target: 525x544px — Near-square image, ~1:1 aspect ratio."),
+    ('Concept_3', "Third About Us Image (Near-Square)", "Target: 696x693px — Near-square image, ~1:1 aspect ratio."),
+    ('Cuisine_1', "First Cuisine Image (Vertical)", "Target: 529x767px — Vertical image, ~2:3 aspect ratio."),
+    ('Cuisine_2', "Second Cuisine Image (Landscape)", "Target: 696x606px — Landscape image, ~1.15:1 aspect ratio."),
+    ('Menu_1', "Menu Image (Wide Horizontal)", "Target: 1321x558px — Wide horizontal image, ~2.4:1 aspect ratio."),
+    ('Chef_1', "First Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
+    ('Chef_2', "Second Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
+    ('Chef_3', "Third Chef Image (Vertical + Black&White) (Optional)", "Target: 600x800px — Vertical image, 3:4 aspect ratio.")
 ]
 
 # ============================================================================
@@ -1001,7 +1012,8 @@ with tab_images:
                 img_format = 'JPEG'
                 ext = 'jpg'
                 target_width, target_height, target_ratio = image_mappings[name]
-                new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.jpg"
+                alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
+                new_filename = make_image_filename(restaurant_name, name, target_width, target_height, 'jpg', alt_for_filename)
                 is_fresh_upload = False
 
                 if uploaded_file:
@@ -1025,9 +1037,6 @@ with tab_images:
                     width, height = img.size
                     original_ratio = width / height
 
-                    if name == 'Concept_3':
-                        target_ratio = 1.0
-
                     allowed_deviation = target_ratio * 0.3
                     aspect_ok = abs(original_ratio - target_ratio) <= allowed_deviation
 
@@ -1049,7 +1058,7 @@ with tab_images:
                     ext = uploaded_file.name.split('.')[-1].lower()
                     format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
                     img_format = format_map.get(ext, 'JPEG')
-                    new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
+                    new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
 
                 elif has_persisted:
                     # Load previously saved image from database blob
@@ -1061,7 +1070,8 @@ with tab_images:
                         ext = orig_fn.rsplit('.', 1)[-1].lower() if '.' in orig_fn else 'jpg'
                         format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
                         img_format = format_map.get(ext, 'JPEG')
-                        new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
+                        alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
+                        new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
                         st.caption("Previously saved image loaded from storage.")
 
                 if resized_img:
@@ -1211,7 +1221,8 @@ with tab_images:
                                 ext = file.name.split('.')[-1].lower()
                                 format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
                                 img_format = format_map.get(ext, 'JPEG')
-                                new_filename = f"{restaurant_name}_{name}_{target_width}x{target_height}.{ext}"
+                                alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
+                                new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
 
                                 img_buffer = io.BytesIO()
                                 resized_img.save(img_buffer, format=img_format, quality=95)
