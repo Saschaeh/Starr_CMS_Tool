@@ -1447,8 +1447,11 @@ with tab_copy:
                 label_visibility="collapsed"
             )
 
-            # Persist copy text when edited
-            db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
+            # Persist copy text only when it actually changes
+            prev_key = f"{section_key}_prev"
+            if st.session_state[section_key] != st.session_state.get(prev_key, ''):
+                st.session_state[prev_key] = st.session_state[section_key]
+                db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
 
             if st.session_state[section_key].strip():
                 copy_button(st.session_state[section_key], f"copy_{section_id}")
@@ -1501,8 +1504,11 @@ with tab_copy:
                 label_visibility="collapsed"
             )
 
-            # Persist copy text when edited
-            db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
+            # Persist copy text only when it actually changes
+            prev_key = f"{section_key}_prev"
+            if st.session_state[section_key] != st.session_state.get(prev_key, ''):
+                st.session_state[prev_key] = st.session_state[section_key]
+                db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
 
             if st.session_state[section_key].strip():
                 copy_button(st.session_state[section_key], f"copy_{section_id}")
