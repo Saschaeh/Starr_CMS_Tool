@@ -1353,10 +1353,10 @@ with tab_copy:
                 stored_url = new_url
                 db.update_restaurant_url(restaurant_name, new_url)
         with col_gen:
-            st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:1px; margin-bottom:32px'></div>", unsafe_allow_html=True)
             generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
         with col_save:
-            st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:1px; margin-bottom:32px'></div>", unsafe_allow_html=True)
             if st.button("Save Changes", type="primary", key="save_copy"):
                 copy_dict = {}
                 for sid, _, _, _, _ in COPY_SECTIONS:
