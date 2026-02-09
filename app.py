@@ -812,9 +812,9 @@ image_mappings = {
 fields = [
     ('Hero_Image_Desktop', "Main Desktop Banner Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 16:9."),
     ('Hero_Image_Mobile', "Main Mobile Banner Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 1.588:1."),
-    ('Concept_1', "First Concept Image (Vertical)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
-    ('Concept_2', "Second Concept Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
-    ('Concept_3', "Third Concept Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
+    ('Concept_1', "First About Us Image (Vertical)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
+    ('Concept_2', "Second About Us Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
+    ('Concept_3', "Third About Us Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
     ('Cuisine_1', "First Cuisine Image (Vertical)", "Image Requirement: Vertical image with <u>estimated</u> aspect ratio of 3:4."),
     ('Cuisine_2', "Second Cuisine Image (Square)", "Image Requirement: Square image with <u>estimated</u> aspect ratio of 1:1."),
     ('Menu_1', "Menu Image (Horizontal)", "Image Requirement: Horizontal image with <u>estimated</u> aspect ratio of 16:9."),
