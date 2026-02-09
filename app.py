@@ -1339,8 +1339,8 @@ with tab_copy:
         url_key = f"{restaurant_name}_website_url"
         stored_url = st.session_state.get(url_key, "")
 
-        # --- URL + Generate ---
-        col_url_edit, col_gen = st.columns([3, 1])
+        # --- URL + Generate + Save ---
+        col_url_edit, col_gen, col_save = st.columns([3, 1, 1])
         with col_url_edit:
             new_url = st.text_input(
                 "Website URL",
@@ -1355,6 +1355,15 @@ with tab_copy:
         with col_gen:
             st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
             generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
+        with col_save:
+            st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+            if st.button("Save Changes", type="primary", key="save_copy"):
+                copy_dict = {}
+                for sid, _, _, _, _ in COPY_SECTIONS:
+                    skey = f"{restaurant_name}_copy_{sid}"
+                    copy_dict[sid] = st.session_state.get(skey, "")
+                db.save_all_copy(restaurant_name, copy_dict)
+                st.success("All copy and metadata saved.")
 
         if not stored_url:
             st.info("Enter a website URL above to enable copy generation.")
@@ -1516,11 +1525,3 @@ with tab_copy:
 
             st.markdown("---")
 
-        # === SAVE BUTTON for all copy + meta sections ===
-        if st.button("Save Changes", type="primary", key="save_copy"):
-            copy_dict = {}
-            for sid, _, _, _, _ in COPY_SECTIONS:
-                skey = f"{restaurant_name}_copy_{sid}"
-                copy_dict[sid] = st.session_state.get(skey, "")
-            db.save_all_copy(restaurant_name, copy_dict)
-            st.success("All copy and metadata saved.")
