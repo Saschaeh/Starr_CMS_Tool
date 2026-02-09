@@ -1253,18 +1253,26 @@ with tab_images:
                         height=68
                     )
 
-                    # Persist alt text if changed
-                    if new_alt != st.session_state.get(f"{restaurant_name}_{name}_alt_prev", ''):
-                        st.session_state[f"{restaurant_name}_{name}_alt_prev"] = new_alt
-                        if has_persisted or is_fresh_upload:
-                            db.update_alt_text(restaurant_name, name, new_alt)
-
                     if st.session_state[alt_key].strip():
                         copy_button(st.session_state[alt_key], f"copy_alt_{name}")
 
             if i < len(fields) - 1:
                 st.markdown("---")
-        
+
+        # Save all alt text changes with one button
+        st.markdown("---")
+        if st.button("Save Alt Text", key="save_all_alt"):
+            saved_count = 0
+            for field_name, _, _ in fields:
+                alt_key = f"{restaurant_name}_{field_name}_alt"
+                if alt_key in st.session_state and st.session_state[alt_key].strip():
+                    db.update_alt_text(restaurant_name, field_name, st.session_state[alt_key])
+                    saved_count += 1
+            if saved_count:
+                st.success(f"Saved alt text for {saved_count} images.")
+            else:
+                st.info("No alt text to save.")
+
         # Batch download
         if any(uploaded_files.values()):
             st.markdown("---")
@@ -1452,12 +1460,6 @@ with tab_copy:
                 label_visibility="collapsed"
             )
 
-            # Persist copy text only when it actually changes
-            prev_key = f"{section_key}_prev"
-            if st.session_state[section_key] != st.session_state.get(prev_key, ''):
-                st.session_state[prev_key] = st.session_state[section_key]
-                db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
-
             if st.session_state[section_key].strip():
                 copy_button(st.session_state[section_key], f"copy_{section_id}")
 
@@ -1509,13 +1511,16 @@ with tab_copy:
                 label_visibility="collapsed"
             )
 
-            # Persist copy text only when it actually changes
-            prev_key = f"{section_key}_prev"
-            if st.session_state[section_key] != st.session_state.get(prev_key, ''):
-                st.session_state[prev_key] = st.session_state[section_key]
-                db.save_copy_section(restaurant_name, section_id, st.session_state[section_key])
-
             if st.session_state[section_key].strip():
                 copy_button(st.session_state[section_key], f"copy_{section_id}")
 
             st.markdown("---")
+
+        # === SAVE BUTTON for all copy + meta sections ===
+        if st.button("Save Changes", type="primary", key="save_copy"):
+            copy_dict = {}
+            for sid, _, _, _, _ in COPY_SECTIONS:
+                skey = f"{restaurant_name}_copy_{sid}"
+                copy_dict[sid] = st.session_state.get(skey, "")
+            db.save_all_copy(restaurant_name, copy_dict)
+            st.success("All copy and metadata saved.")
