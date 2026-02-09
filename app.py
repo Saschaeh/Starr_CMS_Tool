@@ -988,7 +988,6 @@ with tab_images:
         uploaded_files = {}
         for i, (name, header, description) in enumerate(fields):
             if name == 'Chef_1':
-                st.markdown("---")
                 st.subheader("Optional Chef Pictures")
 
             with st.container():
