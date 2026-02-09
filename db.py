@@ -126,6 +126,10 @@ def get_all_restaurants():
 def delete_restaurant(name):
     """Delete restaurant and all associated data from DB."""
     conn = get_connection()
+    # Explicit deletes — ON DELETE CASCADE requires PRAGMA foreign_keys=ON
+    # which Turso/libsql may not support
+    conn.execute("DELETE FROM images WHERE restaurant = ?", (name,))
+    conn.execute("DELETE FROM copy_sections WHERE restaurant = ?", (name,))
     conn.execute("DELETE FROM restaurants WHERE name = ?", (name,))
     conn.commit()
     conn.close()
