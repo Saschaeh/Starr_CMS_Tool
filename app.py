@@ -136,8 +136,10 @@ def generate_alt_text(pil_image):
     if not api_token:
         return None
 
-    # Convert PIL image to base64
+    # Convert PIL image to base64 (convert to RGB for JPEG compatibility)
     img_buffer = io.BytesIO()
+    if pil_image.mode in ('RGBA', 'LA', 'PA', 'P'):
+        pil_image = pil_image.convert('RGB')
     pil_image.save(img_buffer, format='JPEG', quality=85)
     img_b64 = base64.b64encode(img_buffer.getvalue()).decode()
 
@@ -848,6 +850,8 @@ if 'db_loaded' not in st.session_state:
             rname = r['name']
             if r['website_url']:
                 st.session_state[f"{rname}_website_url"] = r['website_url']
+            if r.get('notes'):
+                st.session_state[f"{rname}_notes"] = r['notes']
 
             # Restore copy sections
             copy_data = db.get_copy_for_restaurant(rname)
@@ -944,7 +948,7 @@ with tab_restaurants:
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
         for rest_idx, rest_name in enumerate(rest_list):
-            col1, col2 = st.columns([3, 1])
+            col1, col2, col3 = st.columns([3, 1, 2])
             with col1:
                 # Count uploaded images (required vs optional chef)
                 image_count = 0
@@ -1006,6 +1010,18 @@ with tab_restaurants:
                             if st.session_state['restaurants_list'] else None
                         )
                     st.rerun()
+
+            with col3:
+                notes_key = f"{rest_name}_notes"
+                notes_val = st.text_area(
+                    "Notes",
+                    value=st.session_state.get(notes_key, ""),
+                    key=notes_key,
+                    placeholder="e.g. Needs better hero image...",
+                    height=100,
+                    label_visibility="collapsed",
+                )
+                db.update_restaurant_notes(rest_name, notes_val)
 
             # Divider between restaurant rows
             if rest_idx < len(rest_list) - 1:

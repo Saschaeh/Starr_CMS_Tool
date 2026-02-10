@@ -67,6 +67,7 @@ def init_db():
             name TEXT PRIMARY KEY,
             display_name TEXT NOT NULL,
             website_url TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
         """CREATE TABLE IF NOT EXISTS images (
@@ -91,6 +92,11 @@ def init_db():
     ]
     for sql in stmts:
         conn.execute(sql)
+    # Migrate: add notes column if missing (existing databases)
+    try:
+        conn.execute("ALTER TABLE restaurants ADD COLUMN notes TEXT DEFAULT ''")
+    except Exception:
+        pass  # column already exists
     conn.commit()
     conn.close()
 
@@ -115,12 +121,19 @@ def update_restaurant_url(name, website_url):
 
 
 def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url."""
+    """Return list of dicts with name, display_name, website_url, notes."""
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url FROM restaurants ORDER BY created_at")
+    cur = conn.execute("SELECT name, display_name, website_url, notes FROM restaurants ORDER BY created_at")
     results = _rows_to_dicts(cur)
     conn.close()
     return results
+
+
+def update_restaurant_notes(name, notes):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET notes = ? WHERE name = ?", (notes, name))
+    conn.commit()
+    conn.close()
 
 
 def delete_restaurant(name):
