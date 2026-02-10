@@ -1017,7 +1017,7 @@ with tab_restaurants:
                     "Notes",
                     value=st.session_state.get(notes_key, ""),
                     key=notes_key,
-                    placeholder="e.g. Needs better hero image...",
+                    placeholder="Add comments, requests and requirements here.",
                     height=100,
                     label_visibility="collapsed",
                 )
