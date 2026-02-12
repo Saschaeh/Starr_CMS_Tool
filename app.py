@@ -1091,7 +1091,7 @@ with tab_restaurants:
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
         for rest_idx, rest_name in enumerate(rest_list):
-            col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5])
+            col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5], vertical_alignment="top")
             with col1:
                 # Count uploaded images (required vs optional chef)
                 image_count = 0
@@ -1181,7 +1181,7 @@ with tab_restaurants:
                 _CHECKLIST_ITEMS = [
                     ('hosting', 'Create Hosting'),
                     ('cms', 'Updated CMS'),
-                    ('dns', 'Update DNS & Live'),
+                    ('dns', 'Update DNS'),
                 ]
                 for ck, cl in _CHECKLIST_ITEMS:
                     ckey = f"{rest_name}_check_{ck}"
