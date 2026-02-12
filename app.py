@@ -1501,9 +1501,14 @@ with tab_copy:
         hex_key = f"{color_key}_hex"
         # Canonical value from DB restore or detection
         canonical = st.session_state.get(color_key, "")
-        # Initialize widget keys from canonical (only on first render)
-        st.session_state.setdefault(picker_key, canonical or "#000000")
-        st.session_state.setdefault(hex_key, canonical)
+        # Sync canonical → widget keys BEFORE widgets render
+        # (handles updates from Detect / Generate Copy on previous run)
+        if canonical:
+            st.session_state[picker_key] = canonical
+            st.session_state[hex_key] = canonical
+        else:
+            st.session_state.setdefault(picker_key, "#000000")
+            st.session_state.setdefault(hex_key, "")
 
         col_color_label, col_color_picker, col_color_hex, col_detect, _ = st.columns(
             [1.2, 0.5, 1.5, 0.8, 3.2], vertical_alignment="bottom"
@@ -1528,14 +1533,12 @@ with tab_copy:
             )
         with col_detect:
             detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
-        # Detect color from website
+        # Detect color from website (only set canonical — rerun syncs widget keys)
         if detect_color and stored_url:
             with st.spinner("Detecting brand color..."):
                 ok, _, _, detected = scrape_website(stored_url)
             if ok and detected:
                 st.session_state[color_key] = detected
-                st.session_state[picker_key] = detected
-                st.session_state[hex_key] = detected
                 db.update_restaurant_color(restaurant_name, detected)
                 st.rerun()
             else:
@@ -1543,11 +1546,9 @@ with tab_copy:
         # Sync: picker or hex input changes → update canonical + DB
         if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
             st.session_state[color_key] = typed
-            st.session_state[picker_key] = typed
             db.update_restaurant_color(restaurant_name, typed)
         elif picked != (canonical or "#000000"):
             st.session_state[color_key] = picked
-            st.session_state[hex_key] = picked
             db.update_restaurant_color(restaurant_name, picked)
 
         # --- Edit Copy Instructions ---
@@ -1595,8 +1596,6 @@ with tab_copy:
                         c_key = f"{restaurant_name}_primary_color"
                         if not st.session_state.get(c_key):
                             st.session_state[c_key] = detected_color
-                            st.session_state[f"{c_key}_picker"] = detected_color
-                            st.session_state[f"{c_key}_hex"] = detected_color
                             db.update_restaurant_color(restaurant_name, detected_color)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
