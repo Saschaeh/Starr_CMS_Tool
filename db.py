@@ -134,7 +134,7 @@ def update_restaurant_color(name, primary_color):
 def get_all_restaurants():
     """Return list of dicts with name, display_name, website_url, notes, primary_color."""
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color FROM restaurants ORDER BY created_at")
+    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color FROM restaurants ORDER BY display_name COLLATE NOCASE")
     results = _rows_to_dicts(cur)
     conn.close()
     return results
