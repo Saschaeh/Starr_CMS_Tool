@@ -92,11 +92,15 @@ def init_db():
     ]
     for sql in stmts:
         conn.execute(sql)
-    # Migrate: add notes column if missing (existing databases)
-    try:
-        conn.execute("ALTER TABLE restaurants ADD COLUMN notes TEXT DEFAULT ''")
-    except Exception:
-        pass  # column already exists
+    # Migrate: add columns if missing (existing databases)
+    for col, col_def in [
+        ('notes', "TEXT DEFAULT ''"),
+        ('primary_color', "TEXT DEFAULT ''"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass  # column already exists
     conn.commit()
     conn.close()
 
@@ -120,10 +124,17 @@ def update_restaurant_url(name, website_url):
     conn.close()
 
 
-def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url, notes."""
+def update_restaurant_color(name, primary_color):
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes FROM restaurants ORDER BY created_at")
+    conn.execute("UPDATE restaurants SET primary_color = ? WHERE name = ?", (primary_color, name))
+    conn.commit()
+    conn.close()
+
+
+def get_all_restaurants():
+    """Return list of dicts with name, display_name, website_url, notes, primary_color."""
+    conn = get_connection()
+    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color FROM restaurants ORDER BY created_at")
     results = _rows_to_dicts(cur)
     conn.close()
     return results

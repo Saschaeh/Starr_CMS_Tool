@@ -206,8 +206,68 @@ _COMMON_SUBPATHS = [
 ]
 
 
+def _extract_primary_color(soup, html_bytes):
+    """Extract the likely primary brand color from a webpage.
+
+    Strategy (in priority order):
+    1. <meta name="theme-color">
+    2. CSS custom properties with 'primary/brand/accent/main' in the name
+    3. Most frequent non-neutral hex color in <style> blocks and inline styles
+    """
+    from collections import Counter
+
+    # 1. <meta name="theme-color"> — most explicit signal
+    meta_theme = soup.find('meta', attrs={'name': 'theme-color'})
+    if meta_theme and meta_theme.get('content'):
+        val = meta_theme['content'].strip()
+        if re.match(r'^#[0-9a-fA-F]{3,8}$', val):
+            return val[:7]  # keep only #RRGGBB
+
+    # Gather all CSS text (inline styles + <style> blocks)
+    css_parts = []
+    for style_tag in soup.find_all('style'):
+        if style_tag.string:
+            css_parts.append(style_tag.string)
+    for tag in soup.find_all(style=True):
+        css_parts.append(tag['style'])
+    css_text = '\n'.join(css_parts)
+
+    # 2. CSS custom properties containing primary/brand/accent/main
+    var_pattern = re.compile(
+        r'--[a-zA-Z0-9_-]*(?:primary|brand|accent|main)[a-zA-Z0-9_-]*\s*:\s*(#[0-9a-fA-F]{3,8})\b',
+        re.IGNORECASE,
+    )
+    var_match = var_pattern.search(css_text)
+    if var_match:
+        val = var_match.group(1)
+        # Normalize 3-char hex to 6-char
+        if len(val) == 4:
+            val = '#' + val[1]*2 + val[2]*2 + val[3]*2
+        return val[:7]
+
+    # 3. Most frequent non-neutral hex color across CSS
+    hex6 = re.findall(r'#([0-9a-fA-F]{6})\b', css_text)
+    hex3 = re.findall(r'#([0-9a-fA-F]{3})\b', css_text)
+    all_colors = [c.lower() for c in hex6]
+    for c in hex3:
+        all_colors.append((c[0]*2 + c[1]*2 + c[2]*2).lower())
+
+    def is_neutral(h):
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return max(r, g, b) - min(r, g, b) < 30
+
+    non_neutral = [c for c in all_colors if not is_neutral(c)]
+    if non_neutral:
+        return '#' + Counter(non_neutral).most_common(1)[0][0]
+
+    return ""
+
+
 def scrape_website(url):
-    """Scrape text content from a restaurant website and key subpages."""
+    """Scrape text content from a restaurant website and key subpages.
+
+    Returns (ok, text, error, primary_color).
+    """
     from urllib.parse import urlparse, urljoin
 
     if not url.startswith(('http://', 'https://')):
@@ -220,15 +280,16 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again."
+        return False, "", "Website took too long to respond. Please try again.", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL."
+        return False, "", "Could not connect to website. Please check the URL.", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL."
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again."
+        return False, "", "Could not fetch website. Please check the URL and try again.", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
+    primary_color = _extract_primary_color(soup, response.content)
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     base_domain = parsed_base.netloc
@@ -276,10 +337,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually."
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], ""
+    return True, combined_text[:8000], "", primary_color
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -852,6 +913,8 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_website_url"] = r['website_url']
             if r.get('notes'):
                 st.session_state[f"{rname}_notes"] = r['notes']
+            if r.get('primary_color'):
+                st.session_state[f"{rname}_primary_color"] = r['primary_color']
 
             # Restore copy sections
             copy_data = db.get_copy_for_restaurant(rname)
@@ -1013,9 +1076,9 @@ with tab_restaurants:
 
             with col3:
                 notes_key = f"{rest_name}_notes"
+                st.session_state.setdefault(notes_key, "")
                 notes_val = st.text_area(
                     "Notes",
-                    value=st.session_state.get(notes_key, ""),
                     key=notes_key,
                     placeholder="Add comments, requests and requirements here.",
                     height=100,
@@ -1385,10 +1448,47 @@ with tab_copy:
                     skey = f"{restaurant_name}_copy_{sid}"
                     copy_dict[sid] = st.session_state.get(skey, "")
                 db.save_all_copy(restaurant_name, copy_dict)
+                # Also persist primary color
+                c_key = f"{restaurant_name}_primary_color"
+                db.update_restaurant_color(restaurant_name, st.session_state.get(c_key, ""))
                 st.success("All copy and metadata saved.")
 
         if not stored_url:
             st.info("Enter a website URL above to enable copy generation.")
+
+        # --- Primary Color ---
+        color_key = f"{restaurant_name}_primary_color"
+        st.session_state.setdefault(color_key, "")
+        col_color_label, col_color_picker, col_color_hex, _ = st.columns([1.2, 0.5, 1.5, 4])
+        with col_color_label:
+            st.markdown(
+                '<p style="margin-top:8px;font-weight:600;font-size:0.9rem;">Primary Color</p>',
+                unsafe_allow_html=True,
+            )
+        with col_color_picker:
+            picked = st.color_picker(
+                "Pick color",
+                value=st.session_state[color_key] or "#000000",
+                key=f"{color_key}_picker",
+                label_visibility="collapsed",
+            )
+        with col_color_hex:
+            typed = st.text_input(
+                "Hex color",
+                value=st.session_state[color_key],
+                placeholder="#000000",
+                key=f"{color_key}_hex",
+                label_visibility="collapsed",
+            )
+        # Sync: picker or text input changes update session + DB
+        new_color = ""
+        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed):
+            new_color = typed
+        elif picked != "#000000" or st.session_state[color_key]:
+            new_color = picked
+        if new_color != st.session_state[color_key]:
+            st.session_state[color_key] = new_color
+            db.update_restaurant_color(restaurant_name, new_color)
 
         # --- Edit Copy Instructions ---
         if 'copy_instructions' not in st.session_state:
@@ -1426,9 +1526,14 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err = scrape_website(stored_url)
+                    ok, content, err, detected_color = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
+                elif detected_color:
+                    color_key = f"{restaurant_name}_primary_color"
+                    if not st.session_state.get(color_key):
+                        st.session_state[color_key] = detected_color
+                        db.update_restaurant_color(restaurant_name, detected_color)
                 else:
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
