@@ -857,6 +857,29 @@ button.rest-btn-light:hover {
 .progress-pill.chef   { background: #f0ecf5; color: #6B5B8D; }
 .progress-pill.alt    { background: #e8f5ec; color: #2D7D46; }
 .progress-pill.copy   { background: #fdf3e0; color: #B8860B; }
+.progress-pill.color  {
+    cursor: pointer;
+    border: 1px solid #ddd;
+    position: relative;
+}
+.progress-pill.color:hover { opacity: 0.85; }
+.progress-pill.color .swatch {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+.color-copied-toast {
+    position: fixed; bottom: 2rem; left: 50%;
+    transform: translateX(-50%);
+    background: #333; color: #fff;
+    padding: 0.4rem 1rem; border-radius: 6px;
+    font-size: 0.8rem; z-index: 9999;
+    animation: fadeout 1.5s ease-in-out forwards;
+}
+@keyframes fadeout { 0%,60% { opacity:1; } 100% { opacity:0; } }
 
 
 /* === CUSTOM: COPY SECTION CARD === */
@@ -1086,6 +1109,19 @@ with tab_restaurants:
                 url_html = f'<div class="rest-url">{rest_url}</div>' if rest_url else ''
                 star = '&#9733; ' if is_active else ''
                 display_name = rest_name.replace('_', ' ')
+                primary_color = st.session_state.get(f"{rest_name}_primary_color", "")
+                color_pill = ""
+                if primary_color:
+                    color_pill = (
+                        f'<span class="progress-pill color" '
+                        f'onclick="navigator.clipboard.writeText(\'{primary_color}\');'
+                        f'var t=document.createElement(\'div\');t.className=\'color-copied-toast\';'
+                        f't.textContent=\'Copied {primary_color}\';document.body.appendChild(t);'
+                        f'setTimeout(()=>t.remove(),1600);"'
+                        f' title="Click to copy {primary_color}">'
+                        f'<span class="swatch" style="background:{primary_color};"></span>'
+                        f'{primary_color}</span>'
+                    )
                 st.markdown(f"""
                 <div class="restaurant-row{active_class}" data-name="{rest_name}">
                     <div class="rest-name">{star}{display_name}</div>
@@ -1095,6 +1131,7 @@ with tab_restaurants:
                         <span class="progress-pill chef">Chef: {chef_count}/3</span>
                         <span class="progress-pill alt">Alt Text: {alt_count}</span>
                         <span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>
+                        {color_pill}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
