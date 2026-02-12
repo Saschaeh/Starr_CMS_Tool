@@ -895,6 +895,7 @@ button.rest-btn-light:hover {
 [data-testid="stHorizontalBlock"] .stCheckbox {
     transform: scale(0.8);
     transform-origin: left center;
+    margin-bottom: -0.4rem;
 }
 
 
