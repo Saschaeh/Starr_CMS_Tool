@@ -816,7 +816,7 @@ button.rest-btn-light:hover {
     padding: 0.75rem 1rem;
     margin: 0;
     transition: border-color 0.2s, box-shadow 0.2s;
-    cursor: pointer;
+    position: relative;
 }
 .restaurant-row:hover {
     border-color: #C5A258;
@@ -860,7 +860,9 @@ button.rest-btn-light:hover {
 .progress-pill.color  {
     cursor: pointer;
     border: 1px solid #ddd;
-    position: relative;
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
 }
 .progress-pill.color:hover { opacity: 0.85; }
 .progress-pill.color .swatch {
@@ -1124,7 +1126,8 @@ with tab_restaurants:
                     )
                 st.markdown(f"""
                 <div class="restaurant-row{active_class}" data-name="{rest_name}">
-                    <div class="rest-name">{star}{display_name} {color_pill}</div>
+                    {color_pill}
+                    <div class="rest-name">{star}{display_name}</div>
                     {url_html}
                     <div class="rest-stats">
                         <span class="progress-pill images">Images: {image_count}/8</span>
@@ -1165,42 +1168,17 @@ with tab_restaurants:
             if rest_idx < len(rest_list) - 1:
                 st.markdown('<hr class="restaurant-separator">', unsafe_allow_html=True)
 
-        # Wire up card clicks, lighten Select/Delete buttons
+        # Lighten Select/Delete buttons
         components.html("""
         <script>
         setTimeout(() => {
             const doc = window.parent.document;
-            const rows = doc.querySelectorAll('.restaurant-row[data-name]');
-
-            // Wire up card clicks to trigger the corresponding Select button
-            rows.forEach((row) => {
-                row.addEventListener('click', function() {
-                    const name = this.getAttribute('data-name');
-                    const buttons = doc.querySelectorAll('button');
-                    for (const btn of buttons) {
-                        if (btn.textContent.trim() === 'Select' &&
-                            btn.closest('[data-testid]') &&
-                            btn.id && btn.id.includes(name)) {
-                            btn.click();
-                            return;
-                        }
-                    }
-                    // Fallback: match by index
-                    const allRows = Array.from(doc.querySelectorAll('.restaurant-row[data-name]'));
-                    const idx = allRows.indexOf(this);
-                    const selectBtns = Array.from(buttons).filter(b => b.textContent.trim() === 'Select');
-                    if (selectBtns[idx]) selectBtns[idx].click();
-                });
-            });
-
-            // Lighten Select/Delete buttons
             doc.querySelectorAll('button').forEach((btn) => {
                 const txt = btn.textContent.trim();
                 if (txt === 'Select' || txt === 'Delete') {
                     btn.classList.add('rest-btn-light');
                 }
             });
-
         }, 500);
         </script>
         """, height=0)
