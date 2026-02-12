@@ -96,6 +96,7 @@ def init_db():
     for col, col_def in [
         ('notes', "TEXT DEFAULT ''"),
         ('primary_color', "TEXT DEFAULT ''"),
+        ('checklist', "TEXT DEFAULT ''"),
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
@@ -131,10 +132,17 @@ def update_restaurant_color(name, primary_color):
     conn.close()
 
 
-def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url, notes, primary_color."""
+def update_restaurant_checklist(name, checklist_json):
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color FROM restaurants ORDER BY display_name COLLATE NOCASE")
+    conn.execute("UPDATE restaurants SET checklist = ? WHERE name = ?", (checklist_json, name))
+    conn.commit()
+    conn.close()
+
+
+def get_all_restaurants():
+    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist."""
+    conn = get_connection()
+    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist FROM restaurants ORDER BY display_name COLLATE NOCASE")
     results = _rows_to_dicts(cur)
     conn.close()
     return results

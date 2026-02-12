@@ -979,6 +979,13 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_notes"] = r['notes']
             if r.get('primary_color'):
                 st.session_state[f"{rname}_primary_color"] = r['primary_color']
+            if r.get('checklist'):
+                try:
+                    cl = json.loads(r['checklist'])
+                    for ck, cv in cl.items():
+                        st.session_state[f"{rname}_check_{ck}"] = cv
+                except Exception:
+                    pass
 
             # Restore copy sections
             copy_data = db.get_copy_for_restaurant(rname)
@@ -1067,6 +1074,15 @@ with tab_restaurants:
                     st.session_state[f"{cleaned_name}_website_url"] = url_val
                 # Persist to database
                 db.add_restaurant(cleaned_name, restaurant_input.strip(), url_val)
+                # Auto-detect primary color if URL provided
+                if url_val:
+                    try:
+                        ok, _, _, detected_color = scrape_website(url_val)
+                        if ok and detected_color:
+                            st.session_state[f"{cleaned_name}_primary_color"] = detected_color
+                            db.update_restaurant_color(cleaned_name, detected_color)
+                    except Exception:
+                        pass
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
                 st.rerun()
 
@@ -1156,10 +1172,25 @@ with tab_restaurants:
                     "Notes",
                     key=notes_key,
                     placeholder="Add comments, requests and requirements here.",
-                    height=100,
+                    height=68,
                     label_visibility="collapsed",
                 )
                 db.update_restaurant_notes(rest_name, notes_val)
+
+                _CHECKLIST_ITEMS = [
+                    ('hosting', 'Create Hosting'),
+                    ('cms', 'Updated CMS'),
+                    ('dns', 'Update DNS & Live'),
+                ]
+                check_cols = st.columns(len(_CHECKLIST_ITEMS))
+                for ci, (ck, cl) in enumerate(_CHECKLIST_ITEMS):
+                    ckey = f"{rest_name}_check_{ck}"
+                    st.session_state.setdefault(ckey, False)
+                    with check_cols[ci]:
+                        st.checkbox(cl, key=ckey)
+                cl_dict = {ck: bool(st.session_state.get(f"{rest_name}_check_{ck}", False))
+                           for ck, _ in _CHECKLIST_ITEMS}
+                db.update_restaurant_checklist(rest_name, json.dumps(cl_dict))
 
             # Divider between restaurant rows
             if rest_idx < len(rest_list) - 1:
