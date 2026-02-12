@@ -1091,7 +1091,7 @@ with tab_restaurants:
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
         for rest_idx, rest_name in enumerate(rest_list):
-            col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5], vertical_alignment="top")
+            col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5], vertical_alignment="center")
             with col1:
                 # Count uploaded images (required vs optional chef)
                 image_count = 0
