@@ -884,6 +884,20 @@ button.rest-btn-light:hover {
 @keyframes fadeout { 0%,60% { opacity:1; } 100% { opacity:0; } }
 
 
+/* === CUSTOM: RESTAURANT CHECKLIST === */
+[data-testid="stHorizontalBlock"]:has(.restaurant-row) ~ [data-testid="stVerticalBlock"] .stCheckbox label,
+[data-testid="stHorizontalBlock"] .stCheckbox label {
+    font-size: 0.7rem !important;
+}
+[data-testid="stHorizontalBlock"] .stCheckbox label span[data-testid="stCheckboxLabel"] {
+    font-size: 0.7rem !important;
+}
+[data-testid="stHorizontalBlock"] .stCheckbox {
+    transform: scale(0.8);
+    transform-origin: left center;
+}
+
+
 /* === CUSTOM: COPY SECTION CARD === */
 .copy-section-card {
     background: #FFFFFF;
