@@ -1040,7 +1040,7 @@ fields = [
 # MAIN UI - TABBED LAYOUT
 # ============================================================================
 
-tab_restaurants, tab_images, tab_copy = st.tabs(["Restaurants", "Images", "Copy & Metadata"])
+tab_restaurants, tab_images, tab_copy, tab_brand = st.tabs(["Restaurants", "Images", "Copy & Metadata", "Brand"])
 
 # ==============================================================================
 # TAB 1: RESTAURANTS
@@ -1510,58 +1510,10 @@ with tab_copy:
                     skey = f"{restaurant_name}_copy_{sid}"
                     copy_dict[sid] = st.session_state.get(skey, "")
                 db.save_all_copy(restaurant_name, copy_dict)
-                # Also persist primary color
-                c_key = f"{restaurant_name}_primary_color"
-                db.update_restaurant_color(restaurant_name, st.session_state.get(c_key, ""))
                 st.success("All copy and metadata saved.")
 
         if not stored_url:
             st.info("Enter a website URL above to enable copy generation.")
-
-        # --- Primary Color ---
-        color_key = f"{restaurant_name}_primary_color"
-        canonical = st.session_state.get(color_key, "")
-
-        col_color_label, col_color_picker, col_color_hex, col_detect, _ = st.columns(
-            [1.2, 0.5, 1.5, 0.8, 3.2], vertical_alignment="bottom"
-        )
-        with col_color_label:
-            st.markdown(
-                '<p style="margin-top:8px;font-weight:600;font-size:0.9rem;">Primary Color</p>',
-                unsafe_allow_html=True,
-            )
-        with col_color_picker:
-            picked = st.color_picker(
-                "Pick color",
-                value=canonical or "#000000",
-                label_visibility="collapsed",
-            )
-        with col_color_hex:
-            typed = st.text_input(
-                "Hex color",
-                value=canonical,
-                placeholder="#000000",
-                label_visibility="collapsed",
-            )
-        with col_detect:
-            detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
-        # Detect color from website
-        if detect_color and stored_url:
-            with st.spinner("Detecting brand color..."):
-                ok, _, _, detected = scrape_website(stored_url)
-            if ok and detected:
-                st.session_state[color_key] = detected
-                db.update_restaurant_color(restaurant_name, detected)
-                st.rerun()
-            else:
-                st.warning("Could not detect a primary color from the website.")
-        # Sync: picker or hex input changes → update canonical + DB
-        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
-            st.session_state[color_key] = typed
-            db.update_restaurant_color(restaurant_name, typed)
-        elif picked != (canonical or "#000000"):
-            st.session_state[color_key] = picked
-            db.update_restaurant_color(restaurant_name, picked)
 
         # --- Edit Copy Instructions ---
         if 'copy_instructions' not in st.session_state:
@@ -1726,3 +1678,58 @@ with tab_copy:
 
             st.markdown("---")
 
+# ==============================================================================
+# TAB 4: BRAND
+# ==============================================================================
+with tab_brand:
+    restaurant_name = st.session_state.get('restaurant_name_cleaned')
+    if not restaurant_name:
+        st.header("Brand")
+        st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
+    else:
+        st.header(f"Brand for {restaurant_name.replace('_', ' ')}")
+        stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
+
+        # --- Primary Color ---
+        st.subheader("Primary Color")
+        color_key = f"{restaurant_name}_primary_color"
+        canonical = st.session_state.get(color_key, "")
+
+        col_color_picker, col_color_hex, col_detect, _ = st.columns(
+            [0.5, 1.5, 0.8, 4.4], vertical_alignment="bottom"
+        )
+        with col_color_picker:
+            picked = st.color_picker(
+                "Pick color",
+                value=canonical or "#000000",
+                label_visibility="collapsed",
+            )
+        with col_color_hex:
+            typed = st.text_input(
+                "Hex color",
+                value=canonical,
+                placeholder="#000000",
+                label_visibility="collapsed",
+            )
+        with col_detect:
+            detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
+        # Detect color from website
+        if detect_color and stored_url:
+            with st.spinner("Detecting brand color..."):
+                ok, _, _, detected = scrape_website(stored_url)
+            if ok and detected:
+                st.session_state[color_key] = detected
+                db.update_restaurant_color(restaurant_name, detected)
+                st.rerun()
+            else:
+                st.warning("Could not detect a primary color from the website.")
+        # Sync: picker or hex input changes → update canonical + DB
+        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
+            st.session_state[color_key] = typed
+            db.update_restaurant_color(restaurant_name, typed)
+        elif picked != (canonical or "#000000"):
+            st.session_state[color_key] = picked
+            db.update_restaurant_color(restaurant_name, picked)
+
+        if not stored_url:
+            st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
