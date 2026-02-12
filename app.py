@@ -206,15 +206,16 @@ _COMMON_SUBPATHS = [
 ]
 
 
-def _extract_primary_color(soup, html_bytes):
+def _extract_primary_color(soup, base_url):
     """Extract the likely primary brand color from a webpage.
 
     Strategy (in priority order):
     1. <meta name="theme-color">
     2. CSS custom properties with 'primary/brand/accent/main' in the name
-    3. Most frequent non-neutral hex color in <style> blocks and inline styles
+    3. Most frequent non-neutral hex color across inline + external CSS
     """
     from collections import Counter
+    from urllib.parse import urljoin
 
     # 1. <meta name="theme-color"> — most explicit signal
     meta_theme = soup.find('meta', attrs={'name': 'theme-color'})
@@ -223,42 +224,80 @@ def _extract_primary_color(soup, html_bytes):
         if re.match(r'^#[0-9a-fA-F]{3,8}$', val):
             return val[:7]  # keep only #RRGGBB
 
-    # Gather all CSS text (inline styles + <style> blocks)
-    css_parts = []
+    def _normalize_hex(h):
+        """Normalize 3-char hex to 6-char lowercase."""
+        if len(h) == 3:
+            return (h[0]*2 + h[1]*2 + h[2]*2).lower()
+        return h.lower()
+
+    def _is_neutral(h):
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return max(r, g, b) - min(r, g, b) < 30
+
+    def _extract_colors(css_text):
+        hex6 = re.findall(r'#([0-9a-fA-F]{6})\b', css_text)
+        hex3 = re.findall(r'#([0-9a-fA-F]{3})\b', css_text)
+        all_c = [_normalize_hex(c) for c in hex6 + hex3]
+        return [c for c in all_c if not _is_neutral(c)]
+
+    # Gather inline CSS (<style> blocks + style attributes) — site-specific
+    inline_parts = []
     for style_tag in soup.find_all('style'):
         if style_tag.string:
-            css_parts.append(style_tag.string)
+            inline_parts.append(style_tag.string)
     for tag in soup.find_all(style=True):
-        css_parts.append(tag['style'])
-    css_text = '\n'.join(css_parts)
+        inline_parts.append(tag['style'])
+    inline_css = '\n'.join(inline_parts)
 
-    # 2. CSS custom properties containing primary/brand/accent/main
+    # 2. CSS custom properties containing primary/brand/accent/main (inline first)
     var_pattern = re.compile(
         r'--[a-zA-Z0-9_-]*(?:primary|brand|accent|main)[a-zA-Z0-9_-]*\s*:\s*(#[0-9a-fA-F]{3,8})\b',
         re.IGNORECASE,
     )
-    var_match = var_pattern.search(css_text)
+    var_match = var_pattern.search(inline_css)
     if var_match:
         val = var_match.group(1)
-        # Normalize 3-char hex to 6-char
         if len(val) == 4:
             val = '#' + val[1]*2 + val[2]*2 + val[3]*2
         return val[:7]
 
-    # 3. Most frequent non-neutral hex color across CSS
-    hex6 = re.findall(r'#([0-9a-fA-F]{6})\b', css_text)
-    hex3 = re.findall(r'#([0-9a-fA-F]{3})\b', css_text)
-    all_colors = [c.lower() for c in hex6]
-    for c in hex3:
-        all_colors.append((c[0]*2 + c[1]*2 + c[2]*2).lower())
+    # 3. Check inline CSS for a dominant color first (avoids shared theme noise)
+    inline_colors = _extract_colors(inline_css)
+    if inline_colors:
+        top = Counter(inline_colors).most_common(1)[0]
+        if top[1] >= 3:  # strong enough signal from inline CSS alone
+            return '#' + top[0]
 
-    def is_neutral(h):
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return max(r, g, b) - min(r, g, b) < 30
+    # 4. Fetch external stylesheets and combine with inline
+    skip_domains = ('fonts.googleapis.com', 'use.typekit.net', 'cdnjs.cloudflare.com', 'cdn.jsdelivr.net')
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    external_parts = []
+    for link in soup.find_all('link', rel='stylesheet'):
+        href = link.get('href', '')
+        if not href or any(d in href for d in skip_domains):
+            continue
+        full_url = urljoin(base_url, href)
+        try:
+            css_resp = requests.get(full_url, headers=headers, timeout=5)
+            if css_resp.ok:
+                external_parts.append(css_resp.text)
+        except Exception:
+            pass
 
-    non_neutral = [c for c in all_colors if not is_neutral(c)]
-    if non_neutral:
-        return '#' + Counter(non_neutral).most_common(1)[0][0]
+    external_css = '\n'.join(external_parts)
+
+    # Check external CSS for custom properties too
+    var_match = var_pattern.search(external_css)
+    if var_match:
+        val = var_match.group(1)
+        if len(val) == 4:
+            val = '#' + val[1]*2 + val[2]*2 + val[3]*2
+        return val[:7]
+
+    # Combined: inline colors weighted 3x to prioritise site-specific over theme
+    all_colors = inline_colors * 3 + _extract_colors(external_css)
+    if all_colors:
+        return '#' + Counter(all_colors).most_common(1)[0][0]
 
     return ""
 
@@ -289,9 +328,9 @@ def scrape_website(url):
         return False, "", "Could not fetch website. Please check the URL and try again.", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
-    primary_color = _extract_primary_color(soup, response.content)
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
+    primary_color = _extract_primary_color(soup, base_url)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -1458,7 +1497,14 @@ with tab_copy:
 
         # --- Primary Color ---
         color_key = f"{restaurant_name}_primary_color"
-        st.session_state.setdefault(color_key, "")
+        picker_key = f"{color_key}_picker"
+        hex_key = f"{color_key}_hex"
+        # Canonical value from DB restore or detection
+        canonical = st.session_state.get(color_key, "")
+        # Initialize widget keys from canonical (only on first render)
+        st.session_state.setdefault(picker_key, canonical or "#000000")
+        st.session_state.setdefault(hex_key, canonical)
+
         col_color_label, col_color_picker, col_color_hex, col_detect, _ = st.columns(
             [1.2, 0.5, 1.5, 0.8, 3.2], vertical_alignment="bottom"
         )
@@ -1470,16 +1516,14 @@ with tab_copy:
         with col_color_picker:
             picked = st.color_picker(
                 "Pick color",
-                value=st.session_state[color_key] or "#000000",
-                key=f"{color_key}_picker",
+                key=picker_key,
                 label_visibility="collapsed",
             )
         with col_color_hex:
             typed = st.text_input(
                 "Hex color",
-                value=st.session_state[color_key],
                 placeholder="#000000",
-                key=f"{color_key}_hex",
+                key=hex_key,
                 label_visibility="collapsed",
             )
         with col_detect:
@@ -1490,19 +1534,21 @@ with tab_copy:
                 ok, _, _, detected = scrape_website(stored_url)
             if ok and detected:
                 st.session_state[color_key] = detected
+                st.session_state[picker_key] = detected
+                st.session_state[hex_key] = detected
                 db.update_restaurant_color(restaurant_name, detected)
                 st.rerun()
             else:
                 st.warning("Could not detect a primary color from the website.")
-        # Sync: picker or text input changes update session + DB
-        new_color = ""
-        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed):
-            new_color = typed
-        elif picked != "#000000" or st.session_state[color_key]:
-            new_color = picked
-        if new_color != st.session_state[color_key]:
-            st.session_state[color_key] = new_color
-            db.update_restaurant_color(restaurant_name, new_color)
+        # Sync: picker or hex input changes → update canonical + DB
+        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
+            st.session_state[color_key] = typed
+            st.session_state[picker_key] = typed
+            db.update_restaurant_color(restaurant_name, typed)
+        elif picked != (canonical or "#000000"):
+            st.session_state[color_key] = picked
+            st.session_state[hex_key] = picked
+            db.update_restaurant_color(restaurant_name, picked)
 
         # --- Edit Copy Instructions ---
         if 'copy_instructions' not in st.session_state:
@@ -1546,9 +1592,11 @@ with tab_copy:
                 else:
                     # Auto-fill primary color if not already set
                     if detected_color:
-                        color_key = f"{restaurant_name}_primary_color"
-                        if not st.session_state.get(color_key):
-                            st.session_state[color_key] = detected_color
+                        c_key = f"{restaurant_name}_primary_color"
+                        if not st.session_state.get(c_key):
+                            st.session_state[c_key] = detected_color
+                            st.session_state[f"{c_key}_picker"] = detected_color
+                            st.session_state[f"{c_key}_hex"] = detected_color
                             db.update_restaurant_color(restaurant_name, detected_color)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
