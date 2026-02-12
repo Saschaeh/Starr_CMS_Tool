@@ -1497,18 +1497,7 @@ with tab_copy:
 
         # --- Primary Color ---
         color_key = f"{restaurant_name}_primary_color"
-        picker_key = f"{color_key}_picker"
-        hex_key = f"{color_key}_hex"
-        # Canonical value from DB restore or detection
         canonical = st.session_state.get(color_key, "")
-        # Sync canonical → widget keys BEFORE widgets render
-        # (handles updates from Detect / Generate Copy on previous run)
-        if canonical:
-            st.session_state[picker_key] = canonical
-            st.session_state[hex_key] = canonical
-        else:
-            st.session_state.setdefault(picker_key, "#000000")
-            st.session_state.setdefault(hex_key, "")
 
         col_color_label, col_color_picker, col_color_hex, col_detect, _ = st.columns(
             [1.2, 0.5, 1.5, 0.8, 3.2], vertical_alignment="bottom"
@@ -1521,19 +1510,19 @@ with tab_copy:
         with col_color_picker:
             picked = st.color_picker(
                 "Pick color",
-                key=picker_key,
+                value=canonical or "#000000",
                 label_visibility="collapsed",
             )
         with col_color_hex:
             typed = st.text_input(
                 "Hex color",
+                value=canonical,
                 placeholder="#000000",
-                key=hex_key,
                 label_visibility="collapsed",
             )
         with col_detect:
             detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
-        # Detect color from website (only set canonical — rerun syncs widget keys)
+        # Detect color from website
         if detect_color and stored_url:
             with st.spinner("Detecting brand color..."):
                 ok, _, _, detected = scrape_website(stored_url)
