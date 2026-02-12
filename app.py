@@ -1116,11 +1116,8 @@ with tab_restaurants:
                 if primary_color:
                     color_pill = (
                         f'<span class="progress-pill color" '
-                        f'onclick="navigator.clipboard.writeText(\'{primary_color}\');'
-                        f'var t=document.createElement(\'div\');t.className=\'color-copied-toast\';'
-                        f't.textContent=\'Copied {primary_color}\';document.body.appendChild(t);'
-                        f'setTimeout(()=>t.remove(),1600);"'
-                        f' title="Click to copy {primary_color}">'
+                        f'data-color="{primary_color}" '
+                        f'title="Click to copy {primary_color}">'
                         f'<span class="swatch" style="background:{primary_color};"></span>'
                         f'{primary_color}</span>'
                     )
@@ -1168,7 +1165,7 @@ with tab_restaurants:
             if rest_idx < len(rest_list) - 1:
                 st.markdown('<hr class="restaurant-separator">', unsafe_allow_html=True)
 
-        # Lighten Select/Delete buttons
+        # Lighten Select/Delete buttons + wire up color pill click-to-copy
         components.html("""
         <script>
         setTimeout(() => {
@@ -1178,6 +1175,18 @@ with tab_restaurants:
                 if (txt === 'Select' || txt === 'Delete') {
                     btn.classList.add('rest-btn-light');
                 }
+            });
+            doc.querySelectorAll('.progress-pill.color[data-color]').forEach((pill) => {
+                pill.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const hex = pill.getAttribute('data-color');
+                    navigator.clipboard.writeText(hex);
+                    const t = document.createElement('div');
+                    t.className = 'color-copied-toast';
+                    t.textContent = 'Copied ' + hex;
+                    doc.body.appendChild(t);
+                    setTimeout(() => t.remove(), 1600);
+                });
             });
         }, 500);
         </script>
