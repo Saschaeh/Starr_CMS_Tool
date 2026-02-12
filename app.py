@@ -1091,7 +1091,7 @@ with tab_restaurants:
     if st.session_state['restaurants_list']:
         rest_list = st.session_state['restaurants_list']
         for rest_idx, rest_name in enumerate(rest_list):
-            col1, col2, col3 = st.columns([3, 1, 2])
+            col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5])
             with col1:
                 # Count uploaded images (required vs optional chef)
                 image_count = 0
@@ -1172,22 +1172,21 @@ with tab_restaurants:
                     "Notes",
                     key=notes_key,
                     placeholder="Add comments, requests and requirements here.",
-                    height=68,
+                    height=100,
                     label_visibility="collapsed",
                 )
                 db.update_restaurant_notes(rest_name, notes_val)
 
+            with col4:
                 _CHECKLIST_ITEMS = [
                     ('hosting', 'Create Hosting'),
                     ('cms', 'Updated CMS'),
                     ('dns', 'Update DNS & Live'),
                 ]
-                check_cols = st.columns(len(_CHECKLIST_ITEMS))
-                for ci, (ck, cl) in enumerate(_CHECKLIST_ITEMS):
+                for ck, cl in _CHECKLIST_ITEMS:
                     ckey = f"{rest_name}_check_{ck}"
                     st.session_state.setdefault(ckey, False)
-                    with check_cols[ci]:
-                        st.checkbox(cl, key=ckey)
+                    st.checkbox(cl, key=ckey)
                 cl_dict = {ck: bool(st.session_state.get(f"{rest_name}_check_{ck}", False))
                            for ck, _ in _CHECKLIST_ITEMS}
                 db.update_restaurant_checklist(rest_name, json.dumps(cl_dict))
