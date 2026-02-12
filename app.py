@@ -1124,19 +1124,19 @@ with tab_restaurants:
                         f'<span class="swatch" style="background:{primary_color};"></span>'
                         f'{primary_color}</span>'
                     )
-                st.markdown(f"""
-                <div class="restaurant-row{active_class}" data-name="{rest_name}">
-                    {color_pill}
-                    <div class="rest-name">{star}{display_name}</div>
-                    {url_html}
-                    <div class="rest-stats">
-                        <span class="progress-pill images">Images: {image_count}/8</span>
-                        <span class="progress-pill chef">Chef: {chef_count}/3</span>
-                        <span class="progress-pill alt">Alt Text: {alt_count}</span>
-                        <span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="restaurant-row{active_class}" data-name="{rest_name}">'
+                    f'{color_pill}'
+                    f'<div class="rest-name">{star}{display_name}</div>'
+                    f'{url_html}'
+                    f'<div class="rest-stats">'
+                    f'<span class="progress-pill images">Images: {image_count}/8</span>'
+                    f'<span class="progress-pill chef">Chef: {chef_count}/3</span>'
+                    f'<span class="progress-pill alt">Alt Text: {alt_count}</span>'
+                    f'<span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
 
             with col2:
                 if st.button("Select", key=f"select_{rest_name}"):
