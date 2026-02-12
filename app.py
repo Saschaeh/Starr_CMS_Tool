@@ -1124,14 +1124,13 @@ with tab_restaurants:
                     )
                 st.markdown(f"""
                 <div class="restaurant-row{active_class}" data-name="{rest_name}">
-                    <div class="rest-name">{star}{display_name}</div>
+                    <div class="rest-name">{star}{display_name} {color_pill}</div>
                     {url_html}
                     <div class="rest-stats">
                         <span class="progress-pill images">Images: {image_count}/8</span>
                         <span class="progress-pill chef">Chef: {chef_count}/3</span>
                         <span class="progress-pill alt">Alt Text: {alt_count}</span>
                         <span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>
-                        {color_pill}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
