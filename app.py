@@ -1459,7 +1459,9 @@ with tab_copy:
         # --- Primary Color ---
         color_key = f"{restaurant_name}_primary_color"
         st.session_state.setdefault(color_key, "")
-        col_color_label, col_color_picker, col_color_hex, _ = st.columns([1.2, 0.5, 1.5, 4])
+        col_color_label, col_color_picker, col_color_hex, col_detect, _ = st.columns(
+            [1.2, 0.5, 1.5, 0.8, 3.2], vertical_alignment="bottom"
+        )
         with col_color_label:
             st.markdown(
                 '<p style="margin-top:8px;font-weight:600;font-size:0.9rem;">Primary Color</p>',
@@ -1480,6 +1482,18 @@ with tab_copy:
                 key=f"{color_key}_hex",
                 label_visibility="collapsed",
             )
+        with col_detect:
+            detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
+        # Detect color from website
+        if detect_color and stored_url:
+            with st.spinner("Detecting brand color..."):
+                ok, _, _, detected = scrape_website(stored_url)
+            if ok and detected:
+                st.session_state[color_key] = detected
+                db.update_restaurant_color(restaurant_name, detected)
+                st.rerun()
+            else:
+                st.warning("Could not detect a primary color from the website.")
         # Sync: picker or text input changes update session + DB
         new_color = ""
         if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed):
@@ -1529,12 +1543,13 @@ with tab_copy:
                     ok, content, err, detected_color = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
-                elif detected_color:
-                    color_key = f"{restaurant_name}_primary_color"
-                    if not st.session_state.get(color_key):
-                        st.session_state[color_key] = detected_color
-                        db.update_restaurant_color(restaurant_name, detected_color)
                 else:
+                    # Auto-fill primary color if not already set
+                    if detected_color:
+                        color_key = f"{restaurant_name}_primary_color"
+                        if not st.session_state.get(color_key):
+                            st.session_state[color_key] = detected_color
+                            db.update_restaurant_color(restaurant_name, detected_color)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
