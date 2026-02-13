@@ -925,20 +925,23 @@ button.rest-btn-light:hover {
 .progress-pill.chef   { background: #f0ecf5; color: #6B5B8D; }
 .progress-pill.alt    { background: #e8f5ec; color: #2D7D46; }
 .progress-pill.copy   { background: #fdf3e0; color: #B8860B; }
-.booking-label {
+.brand-corner {
     position: absolute;
-    top: 1.85rem;
+    top: 0.5rem;
     right: 0.5rem;
-    font-size: 0.68rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+.booking-label {
+    font-size: 0.65rem;
     color: #da3743;
     font-weight: 500;
 }
 .progress-pill.color  {
     cursor: pointer;
     border: 1px solid #ddd;
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
 }
 .progress-pill.color:hover { opacity: 0.85; }
 .progress-pill.color .swatch {
@@ -1237,9 +1240,12 @@ with tab_restaurants:
                 booking_label = ""
                 if booking:
                     booking_label = f'<span class="booking-label">{booking}</span>'
+                brand_corner = ""
+                if color_pill or booking_label:
+                    brand_corner = f'<div class="brand-corner">{color_pill}{booking_label}</div>'
                 st.markdown(
                     f'<div class="restaurant-row{active_class}" data-name="{rest_name}">'
-                    f'{color_pill}{booking_label}'
+                    f'{brand_corner}'
                     f'<div class="rest-name">{star}{display_name}</div>'
                     f'{url_html}'
                     f'<div class="rest-stats">'
