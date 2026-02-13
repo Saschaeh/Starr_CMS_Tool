@@ -1725,7 +1725,9 @@ with tab_brand:
     else:
         st.header(f"Brand / Tools for {restaurant_name.replace('_', ' ')}")
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
-        detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
+        _, col_detect_right = st.columns([6, 1])
+        with col_detect_right:
+            detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
 
         # --- Primary Color ---
         st.subheader("Primary Color")
