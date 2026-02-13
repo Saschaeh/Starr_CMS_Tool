@@ -1723,8 +1723,14 @@ with tab_brand:
         st.header("Brand / Tools")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Brand / Tools for {restaurant_name.replace('_', ' ')}")
+        col_header, col_detect_btn, _ = st.columns(
+            [3, 1, 3.2], vertical_alignment="bottom"
+        )
+        with col_header:
+            st.header(f"Brand / Tools for {restaurant_name.replace('_', ' ')}")
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
+        with col_detect_btn:
+            detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
 
         # --- Primary Color ---
         st.subheader("Primary Color")
@@ -1756,13 +1762,7 @@ with tab_brand:
             db.update_restaurant_color(restaurant_name, picked)
 
         # --- Tools ---
-        col_tools_header, col_detect_btn, _ = st.columns(
-            [1, 1, 5.2], vertical_alignment="bottom"
-        )
-        with col_tools_header:
-            st.subheader("Tools")
-        with col_detect_btn:
-            detect_all = st.button("Detect All", key=f"{color_key}_detect", disabled=not stored_url)
+        st.subheader("Tools")
         if detect_all and stored_url:
             with st.spinner("Detecting brand color & booking platform..."):
                 ok, _, _, detected_color, detected_booking = scrape_website(stored_url)
