@@ -925,8 +925,14 @@ button.rest-btn-light:hover {
 .progress-pill.chef   { background: #f0ecf5; color: #6B5B8D; }
 .progress-pill.alt    { background: #e8f5ec; color: #2D7D46; }
 .progress-pill.copy   { background: #fdf3e0; color: #B8860B; }
-.progress-pill.resy   { background: #fce8ea; color: #da3743; }
-.progress-pill.opentable { background: #fce8ea; color: #da3743; }
+.booking-label {
+    position: absolute;
+    top: 1.85rem;
+    right: 0.5rem;
+    font-size: 0.68rem;
+    color: #da3743;
+    font-weight: 500;
+}
 .progress-pill.color  {
     cursor: pointer;
     border: 1px solid #ddd;
@@ -1134,7 +1140,7 @@ fields = [
 # MAIN UI - TABBED LAYOUT
 # ============================================================================
 
-tab_restaurants, tab_images, tab_copy, tab_brand = st.tabs(["Restaurants", "Images", "Copy & Metadata", "Brand"])
+tab_restaurants, tab_images, tab_copy, tab_brand = st.tabs(["Restaurants", "Images", "Copy & Metadata", "Brand / Tools"])
 
 # ==============================================================================
 # TAB 1: RESTAURANTS
@@ -1228,20 +1234,17 @@ with tab_restaurants:
                         f'{primary_color}</span>'
                     )
                 booking = st.session_state.get(f"{rest_name}_booking_platform", "")
-                booking_pill = ""
-                if booking == "Resy":
-                    booking_pill = '<span class="progress-pill resy">Resy</span>'
-                elif booking == "OpenTable":
-                    booking_pill = '<span class="progress-pill opentable">OpenTable</span>'
+                booking_label = ""
+                if booking:
+                    booking_label = f'<span class="booking-label">{booking}</span>'
                 st.markdown(
                     f'<div class="restaurant-row{active_class}" data-name="{rest_name}">'
-                    f'{color_pill}'
+                    f'{color_pill}{booking_label}'
                     f'<div class="rest-name">{star}{display_name}</div>'
                     f'{url_html}'
                     f'<div class="rest-stats">'
                     f'<span class="progress-pill images">Images: {image_count}/8</span>'
                     f'<span class="progress-pill chef">Chef: {chef_count}/3</span>'
-                    f'{booking_pill}'
                     f'</div>'
                     f'<div class="rest-stats" style="margin-top:0.3rem">'
                     f'<span class="progress-pill alt">Alt Text: {alt_count}</span>'
@@ -1717,10 +1720,10 @@ with tab_copy:
 with tab_brand:
     restaurant_name = st.session_state.get('restaurant_name_cleaned')
     if not restaurant_name:
-        st.header("Brand")
+        st.header("Brand / Tools")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Brand for {restaurant_name.replace('_', ' ')}")
+        st.header(f"Brand / Tools for {restaurant_name.replace('_', ' ')}")
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
 
         # --- Primary Color ---
@@ -1745,17 +1748,22 @@ with tab_brand:
                 label_visibility="collapsed",
             )
         with col_detect:
-            detect_color = st.button("Detect", key=f"{color_key}_detect", disabled=not stored_url)
-        # Detect color from website
-        if detect_color and stored_url:
-            with st.spinner("Detecting brand color..."):
-                ok, _, _, detected, _ = scrape_website(stored_url)
-            if ok and detected:
-                st.session_state[color_key] = detected
-                db.update_restaurant_color(restaurant_name, detected)
+            detect_all = st.button("Detect All", key=f"{color_key}_detect", disabled=not stored_url)
+        # Detect color + booking from website
+        if detect_all and stored_url:
+            with st.spinner("Detecting brand color & booking platform..."):
+                ok, _, _, detected_color, detected_booking = scrape_website(stored_url)
+            if ok and detected_color:
+                st.session_state[color_key] = detected_color
+                db.update_restaurant_color(restaurant_name, detected_color)
+            if ok and detected_booking:
+                booking_key = f"{restaurant_name}_booking_platform"
+                st.session_state[booking_key] = detected_booking
+                db.update_restaurant_booking(restaurant_name, detected_booking)
+            if ok and (detected_color or detected_booking):
                 st.rerun()
-            else:
-                st.warning("Could not detect a primary color from the website.")
+            elif not ok or (not detected_color and not detected_booking):
+                st.warning("Could not detect brand color or booking platform from the website.")
         # Sync: picker or hex input changes → update canonical + DB
         if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
             st.session_state[color_key] = typed
@@ -1766,3 +1774,11 @@ with tab_brand:
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
+
+        # --- Booking Platform ---
+        st.subheader("Booking Platform")
+        booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
+        if booking_val:
+            st.markdown(f"Detected: **{booking_val}**")
+        else:
+            st.caption("Not detected — click Detect All to scan the website.")
