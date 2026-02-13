@@ -6,6 +6,9 @@ import re
 import zipfile
 import os
 import json
+from collections import Counter
+from urllib.parse import urlparse, urljoin
+import numpy as np
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 import requests
@@ -54,6 +57,22 @@ def resize_and_crop(img, target_width, target_height):
     img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
     return img
 
+def fix_exif_orientation(img):
+    """Apply EXIF orientation rotation if present."""
+    try:
+        exif = img._getexif()
+        if exif and 274 in exif:
+            orientation = exif[274]
+            if orientation == 3:
+                img = img.rotate(180, expand=True)
+            elif orientation == 6:
+                img = img.rotate(-90, expand=True)
+            elif orientation == 8:
+                img = img.rotate(90, expand=True)
+    except Exception:
+        pass
+    return img
+
 def make_image_filename(restaurant, field_name, width, height, ext, alt_text=''):
     """Generate WordPress-style filename: Restaurant_Field_alt_text_snippet_WxH.ext
     Alt text is trimmed to ~6 words for SEO-friendly filenames."""
@@ -66,35 +85,61 @@ def make_image_filename(restaurant, field_name, width, height, ext, alt_text='')
     return f"{restaurant}_{field_name}_{width}x{height}.{ext}"
 
 def is_black_and_white(img, threshold=0.1):
-    """Check if image is predominantly black and white."""
-    img_rgb = img.convert('RGB')
-    img_data = img_rgb.getdata()
-    
-    bw_count = 0
-    for pixel in img_data:
-        r, g, b = pixel
-        if abs(r - g) < threshold * 255 and abs(g - b) < threshold * 255:
-            bw_count += 1
-    
-    return bw_count / len(list(img_data)) > 0.8
+    """Check if image is predominantly black and white using vectorized NumPy ops."""
+    arr = np.array(img.convert('RGB'), dtype=np.int16)
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    limit = threshold * 255
+    bw_mask = (np.abs(r - g) < limit) & (np.abs(g - b) < limit)
+    return bw_mask.mean() > 0.8
 
 def apply_black_overlay(img, opacity_percent):
     """Apply a semi-transparent black overlay to image."""
     img_rgba = img.convert('RGBA')
     overlay = Image.new('RGBA', img_rgba.size, (0, 0, 0, int(255 * opacity_percent / 100)))
-    result = Image.alpha_composite(img_rgba, overlay)
-    result_rgb = Image.new('RGB', result.size, (255, 255, 255))
-    result_rgb.paste(result, mask=result.split()[3])
-    return result_rgb
+    return Image.alpha_composite(img_rgba, overlay).convert('RGB')
 
-def get_base64_of_bin_file(bin_file_path):
-    """Get base64 encoded string of a file."""
-    try:
-        with open(bin_file_path, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except FileNotFoundError:
-        return ""
+def render_copy_section(restaurant_name, section_id, section_label, word_min, word_max, description, height=120):
+    """Render a copy section card with word count badge, text area, and copy button."""
+    section_key = f"{restaurant_name}_copy_{section_id}"
+    if section_key not in st.session_state:
+        st.session_state[section_key] = ""
+
+    text = st.session_state[section_key]
+    word_count = len(text.split()) if text.strip() else 0
+    if word_count == 0:
+        badge_class = "empty"
+    elif word_min <= word_count <= word_max:
+        badge_class = "in-range"
+    elif word_count > word_max * 1.2:
+        badge_class = "over"
+    else:
+        badge_class = "warn"
+
+    st.markdown(f"""
+    <div class="copy-section-card">
+        <div class="section-header">
+            <div>
+                <div class="section-label">{section_label}</div>
+                <div class="section-desc">{description}</div>
+            </div>
+            <span class="word-count-badge {badge_class}">{word_count} / {word_min}-{word_max} words</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.text_area(
+        f"Edit {section_label}",
+        value=st.session_state[section_key],
+        key=section_key,
+        height=height,
+        placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
+        label_visibility="collapsed"
+    )
+
+    if st.session_state[section_key].strip():
+        copy_button(st.session_state[section_key], f"copy_{section_id}")
+
+    st.markdown("---")
 
 def copy_button(text, key):
     """Render a click-to-copy button using HTML/JS in an iframe."""
@@ -130,6 +175,18 @@ def copy_button(text, key):
 # HUGGING FACE ALT TEXT GENERATION (Free Inference API)
 # ============================================================================
 
+@st.cache_resource
+def _get_hf_client(token):
+    """Return a cached InferenceClient instance for the given token."""
+    return InferenceClient(token=token)
+
+@st.cache_data(show_spinner=False)
+def _load_persisted_image(restaurant, field_name):
+    """Load image blob and metadata from DB (cached to avoid re-fetching every rerun)."""
+    blob_data = db.get_image_data(restaurant, field_name)
+    record = db.get_image_record(restaurant, field_name)
+    return blob_data, record
+
 def generate_alt_text(pil_image):
     """Generate alt text from image using Hugging Face Inference API (Qwen Vision)."""
     api_token = st.session_state.get('hf_api_token', '')
@@ -144,7 +201,7 @@ def generate_alt_text(pil_image):
     img_b64 = base64.b64encode(img_buffer.getvalue()).decode()
 
     try:
-        client = InferenceClient(token=api_token)
+        client = _get_hf_client(api_token)
         result = client.chat_completion(
             model="Qwen/Qwen2.5-VL-7B-Instruct",
             messages=[{
@@ -214,9 +271,6 @@ def _extract_primary_color(soup, base_url):
     2. CSS custom properties with 'primary/brand/accent/main' in the name
     3. Most frequent non-neutral hex color across inline + external CSS
     """
-    from collections import Counter
-    from urllib.parse import urljoin
-
     # 1. <meta name="theme-color"> — most explicit signal
     meta_theme = soup.find('meta', attrs={'name': 'theme-color'})
     if meta_theme and meta_theme.get('content'):
@@ -278,9 +332,10 @@ def _extract_primary_color(soup, base_url):
             continue
         full_url = urljoin(base_url, href)
         try:
-            css_resp = requests.get(full_url, headers=headers, timeout=5)
+            css_resp = requests.get(full_url, headers=headers, timeout=5, stream=True)
             if css_resp.ok:
-                external_parts.append(css_resp.text)
+                css_text = css_resp.text[:500_000]  # cap at 500KB to avoid memory issues
+                external_parts.append(css_text)
         except Exception:
             pass
 
@@ -302,13 +357,12 @@ def _extract_primary_color(soup, base_url):
     return ""
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
     Returns (ok, text, error, primary_color).
     """
-    from urllib.parse import urlparse, urljoin
-
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
 
@@ -481,7 +535,7 @@ def generate_copy(website_text, restaurant_name, section=None, instructions=None
         max_tokens = 1500
 
     try:
-        client = InferenceClient(token=api_token)
+        client = _get_hf_client(api_token)
         result = client.chat_completion(
             model="Qwen/Qwen2.5-7B-Instruct",
             messages=[{"role": "user", "content": prompt}],
@@ -1029,19 +1083,19 @@ if 'restaurants_list' not in st.session_state:
 if 'restaurant_name_cleaned' not in st.session_state:
     st.session_state['restaurant_name_cleaned'] = None
 
-# Image mappings: (name) -> (target_width, target_height, aspect_ratio)
+# Image mappings: (name) -> (target_width, target_height)
 image_mappings = {
-    'Hero_Image_Desktop': (1920, 1080, 1920/1080),
-    'Hero_Image_Mobile': (750, 472, 750/472),
-    'Concept_1': (696, 825, 696/825),
-    'Concept_2': (525, 544, 525/544),
-    'Concept_3': (696, 693, 696/693),
-    'Cuisine_1': (529, 767, 529/767),
-    'Cuisine_2': (696, 606, 696/606),
-    'Menu_1': (1321, 558, 1321/558),
-    'Chef_1': (600, 800, 3/4),
-    'Chef_2': (600, 800, 3/4),
-    'Chef_3': (600, 800, 3/4),
+    'Hero_Image_Desktop': (1920, 1080),
+    'Hero_Image_Mobile': (750, 472),
+    'Concept_1': (696, 825),
+    'Concept_2': (525, 544),
+    'Concept_3': (696, 693),
+    'Cuisine_1': (529, 767),
+    'Cuisine_2': (696, 606),
+    'Menu_1': (1321, 558),
+    'Chef_1': (600, 800),
+    'Chef_2': (600, 800),
+    'Chef_3': (600, 800),
 }
 
 fields = [
@@ -1182,7 +1236,9 @@ with tab_restaurants:
 
             with col3:
                 notes_key = f"{rest_name}_notes"
+                saved_notes_key = f"{rest_name}_saved_notes"
                 st.session_state.setdefault(notes_key, "")
+                st.session_state.setdefault(saved_notes_key, st.session_state[notes_key])
                 notes_val = st.text_area(
                     "Notes",
                     key=notes_key,
@@ -1190,7 +1246,9 @@ with tab_restaurants:
                     height=100,
                     label_visibility="collapsed",
                 )
-                db.update_restaurant_notes(rest_name, notes_val)
+                if notes_val != st.session_state[saved_notes_key]:
+                    st.session_state[saved_notes_key] = notes_val
+                    db.update_restaurant_notes(rest_name, notes_val)
 
             with col4:
                 _CHECKLIST_ITEMS = [
@@ -1204,7 +1262,11 @@ with tab_restaurants:
                     st.checkbox(cl, key=ckey)
                 cl_dict = {ck: bool(st.session_state.get(f"{rest_name}_check_{ck}", False))
                            for ck, _ in _CHECKLIST_ITEMS}
-                db.update_restaurant_checklist(rest_name, json.dumps(cl_dict))
+                cl_json = json.dumps(cl_dict)
+                prev_cl_key = f"{rest_name}_prev_checklist"
+                if cl_json != st.session_state.get(prev_cl_key, ""):
+                    st.session_state[prev_cl_key] = cl_json
+                    db.update_restaurant_checklist(rest_name, cl_json)
 
             # Divider between restaurant rows
             if rest_idx < len(rest_list) - 1:
@@ -1278,28 +1340,15 @@ with tab_images:
                 resized_img = None
                 img_format = 'JPEG'
                 ext = 'jpg'
-                target_width, target_height, target_ratio = image_mappings[name]
+                target_width, target_height = image_mappings[name]
+                target_ratio = target_width / target_height
                 alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
                 new_filename = make_image_filename(restaurant_name, name, target_width, target_height, 'jpg', alt_for_filename)
                 is_fresh_upload = False
 
                 if uploaded_file:
                     is_fresh_upload = True
-                    img = Image.open(uploaded_file)
-
-                    # Handle EXIF orientation
-                    try:
-                        exif = img._getexif()
-                        if exif and 274 in exif:
-                            orientation = exif[274]
-                            if orientation == 3:
-                                img = img.rotate(180, expand=True)
-                            elif orientation == 6:
-                                img = img.rotate(-90, expand=True)
-                            elif orientation == 8:
-                                img = img.rotate(90, expand=True)
-                    except:
-                        pass
+                    img = fix_exif_orientation(Image.open(uploaded_file))
 
                     width, height = img.size
                     original_ratio = width / height
@@ -1328,11 +1377,10 @@ with tab_images:
                     new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
 
                 elif has_persisted:
-                    # Load previously saved image from database blob
-                    blob_data = db.get_image_data(restaurant_name, name)
+                    # Load previously saved image from database blob (cached)
+                    blob_data, record = _load_persisted_image(restaurant_name, name)
                     if blob_data:
                         resized_img = Image.open(io.BytesIO(blob_data))
-                        record = db.get_image_record(restaurant_name, name)
                         orig_fn = record.get('original_filename', '') if record else ''
                         ext = orig_fn.rsplit('.', 1)[-1].lower() if '.' in orig_fn else 'jpg'
                         format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
@@ -1476,21 +1524,8 @@ with tab_images:
                     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
                         for name, file in uploaded_files.items():
                             if file:
-                                target_width, target_height, _ = image_mappings[name]
-                                img = Image.open(file)
-
-                                try:
-                                    exif = img._getexif()
-                                    if exif and 274 in exif:
-                                        orientation = exif[274]
-                                        if orientation == 3:
-                                            img = img.rotate(180, expand=True)
-                                        elif orientation == 6:
-                                            img = img.rotate(-90, expand=True)
-                                        elif orientation == 8:
-                                            img = img.rotate(90, expand=True)
-                                except:
-                                    pass
+                                target_width, target_height = image_mappings[name]
+                                img = fix_exif_orientation(Image.open(file))
 
                                 resized_img = resize_and_crop(img, target_width, target_height)
 
@@ -1623,54 +1658,12 @@ with tab_copy:
         # === WEBSITE COPY SECTIONS ===
         st.subheader("Website Copy")
 
-        # Sections that are website copy (not meta)
         copy_section_ids = ['the_concept', 'the_cuisine', 'group_dining']
         meta_section_ids = ['meta_title', 'meta_description']
 
         for section_id, section_label, word_min, word_max, description in COPY_SECTIONS:
-            if section_id not in copy_section_ids:
-                continue
-
-            section_key = f"{restaurant_name}_copy_{section_id}"
-            if section_key not in st.session_state:
-                st.session_state[section_key] = ""
-
-            text = st.session_state[section_key]
-            word_count = len(text.split()) if text.strip() else 0
-            if word_count == 0:
-                badge_class = "empty"
-            elif word_min <= word_count <= word_max:
-                badge_class = "in-range"
-            elif word_count < word_min or word_count <= word_max * 1.2:
-                badge_class = "warn"
-            else:
-                badge_class = "over"
-
-            st.markdown(f"""
-            <div class="copy-section-card">
-                <div class="section-header">
-                    <div>
-                        <div class="section-label">{section_label}</div>
-                        <div class="section-desc">{description}</div>
-                    </div>
-                    <span class="word-count-badge {badge_class}">{word_count} / {word_min}-{word_max} words</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.text_area(
-                f"Edit {section_label}",
-                value=st.session_state[section_key],
-                key=section_key,
-                height=120,
-                placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
-                label_visibility="collapsed"
-            )
-
-            if st.session_state[section_key].strip():
-                copy_button(st.session_state[section_key], f"copy_{section_id}")
-
-            st.markdown("---")
+            if section_id in copy_section_ids:
+                render_copy_section(restaurant_name, section_id, section_label, word_min, word_max, description)
 
         # === SEO META TAGS ===
         st.markdown("---")
@@ -1678,50 +1671,9 @@ with tab_copy:
         st.caption("These are the HTML meta title and description tags for search engine optimization.")
 
         for section_id, section_label, word_min, word_max, description in COPY_SECTIONS:
-            if section_id not in meta_section_ids:
-                continue
-
-            section_key = f"{restaurant_name}_copy_{section_id}"
-            if section_key not in st.session_state:
-                st.session_state[section_key] = ""
-
-            text = st.session_state[section_key]
-            word_count = len(text.split()) if text.strip() else 0
-            if word_count == 0:
-                badge_class = "empty"
-            elif word_min <= word_count <= word_max:
-                badge_class = "in-range"
-            elif word_count < word_min or word_count <= word_max * 1.2:
-                badge_class = "warn"
-            else:
-                badge_class = "over"
-
-            st.markdown(f"""
-            <div class="copy-section-card">
-                <div class="section-header">
-                    <div>
-                        <div class="section-label">{section_label}</div>
-                        <div class="section-desc">{description}</div>
-                    </div>
-                    <span class="word-count-badge {badge_class}">{word_count} / {word_min}-{word_max} words</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            text_height = 68 if section_id == 'meta_title' else 80
-            st.text_area(
-                f"Edit {section_label}",
-                value=st.session_state[section_key],
-                key=section_key,
-                height=text_height,
-                placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
-                label_visibility="collapsed"
-            )
-
-            if st.session_state[section_key].strip():
-                copy_button(st.session_state[section_key], f"copy_{section_id}")
-
-            st.markdown("---")
+            if section_id in meta_section_ids:
+                height = 68 if section_id == 'meta_title' else 80
+                render_copy_section(restaurant_name, section_id, section_label, word_min, word_max, description, height=height)
 
 # ==============================================================================
 # TAB 4: BRAND

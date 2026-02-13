@@ -24,8 +24,13 @@ if USE_TURSO:
 else:
     import sqlite3
 
+import threading
+
 DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 DB_PATH = os.path.join(DB_DIR, 'starr_cms.db')
+
+# Thread-local connection cache (avoids opening/closing per call)
+_local = threading.local()
 
 
 def _rows_to_dicts(cursor):
@@ -44,13 +49,17 @@ def _row_to_dict(cursor):
 
 
 def get_connection():
+    conn = getattr(_local, 'conn', None)
+    if conn is not None:
+        return conn
     if USE_TURSO:
         conn = libsql.connect(TURSO_DB_URL, auth_token=TURSO_AUTH_TOKEN)
     else:
         os.makedirs(DB_DIR, exist_ok=True)
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
+    _local.conn = conn
     return conn
 
 
@@ -103,7 +112,6 @@ def init_db():
         except Exception:
             pass  # column already exists
     conn.commit()
-    conn.close()
 
 
 # ─── Restaurant CRUD ─────────────────────────────────────────────────────────
@@ -115,28 +123,24 @@ def add_restaurant(name, display_name, website_url=''):
         (name, display_name, website_url)
     )
     conn.commit()
-    conn.close()
 
 
 def update_restaurant_url(name, website_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET website_url = ? WHERE name = ?", (website_url, name))
     conn.commit()
-    conn.close()
 
 
 def update_restaurant_color(name, primary_color):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET primary_color = ? WHERE name = ?", (primary_color, name))
     conn.commit()
-    conn.close()
 
 
 def update_restaurant_checklist(name, checklist_json):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET checklist = ? WHERE name = ?", (checklist_json, name))
     conn.commit()
-    conn.close()
 
 
 def get_all_restaurants():
@@ -144,7 +148,6 @@ def get_all_restaurants():
     conn = get_connection()
     cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist FROM restaurants ORDER BY display_name COLLATE NOCASE")
     results = _rows_to_dicts(cur)
-    conn.close()
     return results
 
 
@@ -152,7 +155,6 @@ def update_restaurant_notes(name, notes):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET notes = ? WHERE name = ?", (notes, name))
     conn.commit()
-    conn.close()
 
 
 def delete_restaurant(name):
@@ -164,7 +166,6 @@ def delete_restaurant(name):
     conn.execute("DELETE FROM copy_sections WHERE restaurant = ?", (name,))
     conn.execute("DELETE FROM restaurants WHERE name = ?", (name,))
     conn.commit()
-    conn.close()
 
 
 # ─── Image CRUD ──────────────────────────────────────────────────────────────
@@ -182,7 +183,6 @@ def save_image(restaurant, field_name, image_bytes, original_filename, alt_text=
             overlay_opacity = excluded.overlay_opacity
     """, (restaurant, field_name, original_filename, image_bytes, alt_text, overlay_opacity))
     conn.commit()
-    conn.close()
 
 
 def update_alt_text(restaurant, field_name, alt_text):
@@ -192,7 +192,6 @@ def update_alt_text(restaurant, field_name, alt_text):
         (alt_text, restaurant, field_name)
     )
     conn.commit()
-    conn.close()
 
 
 def update_overlay(restaurant, field_name, overlay_opacity):
@@ -202,7 +201,6 @@ def update_overlay(restaurant, field_name, overlay_opacity):
         (overlay_opacity, restaurant, field_name)
     )
     conn.commit()
-    conn.close()
 
 
 def get_images_for_restaurant(restaurant):
@@ -216,7 +214,6 @@ def get_images_for_restaurant(restaurant):
         (restaurant,)
     )
     rows = _rows_to_dicts(cur)
-    conn.close()
     return {r['field_name']: r for r in rows}
 
 
@@ -228,7 +225,6 @@ def get_image_data(restaurant, field_name):
         (restaurant, field_name)
     )
     row = _row_to_dict(cur)
-    conn.close()
     if row and row['image_data']:
         return bytes(row['image_data'])
     return None
@@ -243,7 +239,6 @@ def get_image_record(restaurant, field_name):
         (restaurant, field_name)
     )
     result = _row_to_dict(cur)
-    conn.close()
     return result
 
 
@@ -257,7 +252,6 @@ def save_copy_section(restaurant, section_id, content):
         ON CONFLICT(restaurant, section_id) DO UPDATE SET content = excluded.content
     """, (restaurant, section_id, content))
     conn.commit()
-    conn.close()
 
 
 def get_copy_for_restaurant(restaurant):
@@ -268,7 +262,6 @@ def get_copy_for_restaurant(restaurant):
         (restaurant,)
     )
     rows = _rows_to_dicts(cur)
-    conn.close()
     return {r['section_id']: r['content'] for r in rows}
 
 
@@ -282,4 +275,3 @@ def save_all_copy(restaurant, copy_dict):
             ON CONFLICT(restaurant, section_id) DO UPDATE SET content = excluded.content
         """, (restaurant, section_id, content))
     conn.commit()
-    conn.close()
