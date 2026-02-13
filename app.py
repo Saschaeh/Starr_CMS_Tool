@@ -1731,8 +1731,8 @@ with tab_brand:
         color_key = f"{restaurant_name}_primary_color"
         canonical = st.session_state.get(color_key, "")
 
-        col_color_picker, col_color_hex, col_detect, _ = st.columns(
-            [0.5, 1.5, 0.8, 4.4], vertical_alignment="bottom"
+        col_color_picker, col_color_hex, col_detect, col_booking, _ = st.columns(
+            [0.5, 1.5, 1, 1.5, 2.7], vertical_alignment="bottom"
         )
         with col_color_picker:
             picked = st.color_picker(
@@ -1749,6 +1749,12 @@ with tab_brand:
             )
         with col_detect:
             detect_all = st.button("Detect All", key=f"{color_key}_detect", disabled=not stored_url)
+        with col_booking:
+            booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
+            if booking_val:
+                st.markdown(f"Booking: **{booking_val}**")
+            else:
+                st.caption("Booking: —")
         # Detect color + booking from website
         if detect_all and stored_url:
             with st.spinner("Detecting brand color & booking platform..."):
@@ -1774,11 +1780,3 @@ with tab_brand:
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
-
-        # --- Booking Platform ---
-        st.subheader("Booking Platform")
-        booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
-        if booking_val:
-            st.markdown(f"Detected: **{booking_val}**")
-        else:
-            st.caption("Not detected — click Detect All to scan the website.")
