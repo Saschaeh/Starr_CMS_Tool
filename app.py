@@ -1735,7 +1735,7 @@ with tab_brand:
         canonical = st.session_state.get(color_key, "")
 
         col_color_picker, col_color_hex, _ = st.columns(
-            [0.5, 1.5, 5.2], vertical_alignment="center"
+            [0.5, 1.5, 5.2], vertical_alignment="bottom"
         )
         with col_color_picker:
             picked = st.color_picker(
@@ -1758,8 +1758,6 @@ with tab_brand:
             st.session_state[color_key] = picked
             db.update_restaurant_color(restaurant_name, picked)
 
-        st.markdown("<div style='margin-top:0.5rem'></div>", unsafe_allow_html=True)
-
         # --- Reservation ---
         st.subheader("Reservation")
         if detect_all and stored_url:
@@ -1778,9 +1776,7 @@ with tab_brand:
                 st.warning("Could not detect brand color or booking platform from the website.")
         booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
         if booking_val:
-            col_bk_pad, col_bk_text, _ = st.columns([0.5, 1.5, 5.2])
-            with col_bk_text:
-                st.markdown(f"**{booking_val}**")
+            st.caption(f"Booking platform: **{booking_val}**")
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
