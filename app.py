@@ -357,11 +357,24 @@ def _extract_primary_color(soup, base_url):
     return ""
 
 
+def _detect_booking_platform(html_bytes):
+    """Detect whether a restaurant uses Resy or OpenTable from raw HTML.
+
+    Returns "Resy", "OpenTable", or "".
+    """
+    html_str = html_bytes.decode('utf-8', errors='ignore').lower()
+    if any(m in html_str for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
+        return "Resy"
+    if any(m in html_str for m in ('opentable.com/widget', 'opentable.com/r/')):
+        return "OpenTable"
+    return ""
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color).
+    Returns (ok, text, error, primary_color, booking_platform).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -373,18 +386,19 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", ""
+        return False, "", "Website took too long to respond. Please try again.", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     primary_color = _extract_primary_color(soup, base_url)
+    booking_platform = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -430,10 +444,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color
+    return True, combined_text[:8000], "", primary_color, booking_platform
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -911,6 +925,8 @@ button.rest-btn-light:hover {
 .progress-pill.chef   { background: #f0ecf5; color: #6B5B8D; }
 .progress-pill.alt    { background: #e8f5ec; color: #2D7D46; }
 .progress-pill.copy   { background: #fdf3e0; color: #B8860B; }
+.progress-pill.resy   { background: #fce8ea; color: #da3743; }
+.progress-pill.opentable { background: #fce8ea; color: #da3743; }
 .progress-pill.color  {
     cursor: pointer;
     border: 1px solid #ddd;
@@ -1048,6 +1064,8 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_notes"] = r['notes']
             if r.get('primary_color'):
                 st.session_state[f"{rname}_primary_color"] = r['primary_color']
+            if r.get('booking_platform'):
+                st.session_state[f"{rname}_booking_platform"] = r['booking_platform']
             if r.get('checklist'):
                 try:
                     cl = json.loads(r['checklist'])
@@ -1146,10 +1164,13 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
+                        if ok and detected_booking:
+                            st.session_state[f"{cleaned_name}_booking_platform"] = detected_booking
+                            db.update_restaurant_booking(cleaned_name, detected_booking)
                     except Exception:
                         pass
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
@@ -1206,6 +1227,12 @@ with tab_restaurants:
                         f'<span class="swatch" style="background:{primary_color};"></span>'
                         f'{primary_color}</span>'
                     )
+                booking = st.session_state.get(f"{rest_name}_booking_platform", "")
+                booking_pill = ""
+                if booking == "Resy":
+                    booking_pill = '<span class="progress-pill resy">Resy</span>'
+                elif booking == "OpenTable":
+                    booking_pill = '<span class="progress-pill opentable">OpenTable</span>'
                 st.markdown(
                     f'<div class="restaurant-row{active_class}" data-name="{rest_name}">'
                     f'{color_pill}'
@@ -1214,6 +1241,9 @@ with tab_restaurants:
                     f'<div class="rest-stats">'
                     f'<span class="progress-pill images">Images: {image_count}/8</span>'
                     f'<span class="progress-pill chef">Chef: {chef_count}/3</span>'
+                    f'{booking_pill}'
+                    f'</div>'
+                    f'<div class="rest-stats" style="margin-top:0.3rem">'
                     f'<span class="progress-pill alt">Alt Text: {alt_count}</span>'
                     f'<span class="progress-pill copy">Copy: {copy_count}/{len(COPY_SECTIONS)}</span>'
                     f'</div></div>',
@@ -1631,7 +1661,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1641,6 +1671,12 @@ with tab_copy:
                         if not st.session_state.get(c_key):
                             st.session_state[c_key] = detected_color
                             db.update_restaurant_color(restaurant_name, detected_color)
+                    # Auto-fill booking platform if not already set
+                    if detected_booking:
+                        b_key = f"{restaurant_name}_booking_platform"
+                        if not st.session_state.get(b_key):
+                            st.session_state[b_key] = detected_booking
+                            db.update_restaurant_booking(restaurant_name, detected_booking)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -1713,7 +1749,7 @@ with tab_brand:
         # Detect color from website
         if detect_color and stored_url:
             with st.spinner("Detecting brand color..."):
-                ok, _, _, detected = scrape_website(stored_url)
+                ok, _, _, detected, _ = scrape_website(stored_url)
             if ok and detected:
                 st.session_state[color_key] = detected
                 db.update_restaurant_color(restaurant_name, detected)
