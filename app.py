@@ -1731,8 +1731,8 @@ with tab_brand:
         color_key = f"{restaurant_name}_primary_color"
         canonical = st.session_state.get(color_key, "")
 
-        col_color_picker, col_color_hex, col_detect, col_booking, _ = st.columns(
-            [0.5, 1.5, 1, 1.5, 2.7], vertical_alignment="bottom"
+        col_color_picker, col_color_hex, _ = st.columns(
+            [0.5, 1.5, 5.2], vertical_alignment="bottom"
         )
         with col_color_picker:
             picked = st.color_picker(
@@ -1747,15 +1747,22 @@ with tab_brand:
                 placeholder="#000000",
                 label_visibility="collapsed",
             )
-        with col_detect:
+        # Sync: picker or hex input changes → update canonical + DB
+        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
+            st.session_state[color_key] = typed
+            db.update_restaurant_color(restaurant_name, typed)
+        elif picked != (canonical or "#000000"):
+            st.session_state[color_key] = picked
+            db.update_restaurant_color(restaurant_name, picked)
+
+        # --- Tools ---
+        col_tools_header, col_detect_btn, _ = st.columns(
+            [1, 1, 5.2], vertical_alignment="bottom"
+        )
+        with col_tools_header:
+            st.subheader("Tools")
+        with col_detect_btn:
             detect_all = st.button("Detect All", key=f"{color_key}_detect", disabled=not stored_url)
-        with col_booking:
-            booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
-            if booking_val:
-                st.markdown(f"Booking: **{booking_val}**")
-            else:
-                st.caption("Booking: —")
-        # Detect color + booking from website
         if detect_all and stored_url:
             with st.spinner("Detecting brand color & booking platform..."):
                 ok, _, _, detected_color, detected_booking = scrape_website(stored_url)
@@ -1770,13 +1777,9 @@ with tab_brand:
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
-        # Sync: picker or hex input changes → update canonical + DB
-        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
-            st.session_state[color_key] = typed
-            db.update_restaurant_color(restaurant_name, typed)
-        elif picked != (canonical or "#000000"):
-            st.session_state[color_key] = picked
-            db.update_restaurant_color(restaurant_name, picked)
+        booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
+        if booking_val:
+            st.caption(f"Booking platform: **{booking_val}**")
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
