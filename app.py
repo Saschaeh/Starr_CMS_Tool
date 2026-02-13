@@ -1143,7 +1143,7 @@ fields = [
 # MAIN UI - TABBED LAYOUT
 # ============================================================================
 
-tab_restaurants, tab_images, tab_copy, tab_brand = st.tabs(["Restaurants", "Images", "Copy & Metadata", "Brand / Reservation"])
+tab_restaurants, tab_images, tab_copy, tab_brand = st.tabs(["Restaurants", "Images", "Copy & Metadata", "Brand & Reservation"])
 
 # ==============================================================================
 # TAB 1: RESTAURANTS
@@ -1726,10 +1726,10 @@ with tab_copy:
 with tab_brand:
     restaurant_name = st.session_state.get('restaurant_name_cleaned')
     if not restaurant_name:
-        st.header("Brand / Reservation")
+        st.header("Brand & Reservation")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Brand / Reservation for {restaurant_name.replace('_', ' ')}")
+        st.header(f"Brand & Reservation for {restaurant_name.replace('_', ' ')}")
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
         _, col_detect_right = st.columns([6, 1])
         with col_detect_right:
