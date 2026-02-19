@@ -1329,7 +1329,7 @@ with tab_restaurants:
                 st.session_state.setdefault(pd_key, False)
                 pd_prev_key = f"{rest_name}_prev_pull_data"
                 st.session_state.setdefault(pd_prev_key, st.session_state[pd_key])
-                st.checkbox("Pull Data", key=pd_key)
+                st.checkbox("Push Data", key=pd_key)
                 pd_val = bool(st.session_state.get(pd_key, False))
                 if pd_val != st.session_state[pd_prev_key]:
                     st.session_state[pd_prev_key] = pd_val
