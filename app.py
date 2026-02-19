@@ -1327,10 +1327,11 @@ with tab_restaurants:
                 # Pull Data flag — signals the CMS updater to pull this restaurant's data
                 pd_key = f"{rest_name}_pull_data"
                 st.session_state.setdefault(pd_key, False)
+                pd_prev_key = f"{rest_name}_prev_pull_data"
+                st.session_state.setdefault(pd_prev_key, st.session_state[pd_key])
                 st.checkbox("Pull Data", key=pd_key)
                 pd_val = bool(st.session_state.get(pd_key, False))
-                pd_prev_key = f"{rest_name}_prev_pull_data"
-                if pd_val != st.session_state.get(pd_prev_key):
+                if pd_val != st.session_state[pd_prev_key]:
                     st.session_state[pd_prev_key] = pd_val
                     db.update_restaurant_pull_data(rest_name, pd_val)
 
