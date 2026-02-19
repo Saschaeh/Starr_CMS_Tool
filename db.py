@@ -107,6 +107,8 @@ def init_db():
         ('primary_color', "TEXT DEFAULT ''"),
         ('checklist', "TEXT DEFAULT ''"),
         ('booking_platform', "TEXT DEFAULT ''"),
+        ('opentable_rid', "TEXT DEFAULT ''"),
+        ('pull_data', "INTEGER DEFAULT 0"),
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
@@ -150,10 +152,22 @@ def update_restaurant_booking(name, booking_platform):
     conn.commit()
 
 
-def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist, booking_platform."""
+def update_restaurant_opentable_rid(name, opentable_rid):
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist, booking_platform FROM restaurants ORDER BY display_name COLLATE NOCASE")
+    conn.execute("UPDATE restaurants SET opentable_rid = ? WHERE name = ?", (opentable_rid, name))
+    conn.commit()
+
+
+def update_restaurant_pull_data(name, pull_data):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET pull_data = ? WHERE name = ?", (int(pull_data), name))
+    conn.commit()
+
+
+def get_all_restaurants():
+    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data."""
+    conn = get_connection()
+    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data FROM restaurants ORDER BY display_name COLLATE NOCASE")
     results = _rows_to_dicts(cur)
     return results
 

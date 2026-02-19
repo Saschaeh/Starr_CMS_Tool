@@ -360,21 +360,45 @@ def _extract_primary_color(soup, base_url):
 def _detect_booking_platform(html_bytes):
     """Detect whether a restaurant uses Resy or OpenTable from raw HTML.
 
-    Returns "Resy", "OpenTable", or "".
+    Returns ("Resy", ""), ("OpenTable", rid), or ("", "").
+    When OpenTable is detected, also extracts the RID from widget/link URLs.
     """
-    html_str = html_bytes.decode('utf-8', errors='ignore').lower()
-    if any(m in html_str for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
-        return "Resy"
-    if any(m in html_str for m in ('opentable.com/widget', 'opentable.com/r/')):
-        return "OpenTable"
-    return ""
+    html_str = html_bytes.decode('utf-8', errors='ignore')
+    html_lower = html_str.lower()
+    if any(m in html_lower for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
+        return "Resy", ""
+    if any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
+        # Extract RID from OpenTable URLs (e.g. rid=123456)
+        rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
+        rid = rid_match.group(1) if rid_match else ""
+        return "OpenTable", rid
+    return "", ""
+
+
+def _search_opentable_rid(restaurant_display_name):
+    """Search OpenTable.com for a restaurant and return its numeric RID, or "".
+
+    Searches by restaurant name and parses the restaurantId from the results page.
+    """
+    try:
+        query = restaurant_display_name.replace('_', ' ')
+        search_url = f"https://www.opentable.com/s?term={requests.utils.quote(query)}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(search_url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return ""
+        # OpenTable embeds restaurantId in JSON data on the page
+        rid_match = re.search(r'"restaurantId"\s*:\s*(\d+)', resp.text)
+        return rid_match.group(1) if rid_match else ""
+    except Exception:
+        return ""
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform).
+    Returns (ok, text, error, primary_color, booking_platform, opentable_rid).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -386,19 +410,19 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", ""
+        return False, "", "Website took too long to respond. Please try again.", "", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     primary_color = _extract_primary_color(soup, base_url)
-    booking_platform = _detect_booking_platform(response.content)
+    booking_platform, opentable_rid = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -444,10 +468,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform
+    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1075,6 +1099,10 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_primary_color"] = r['primary_color']
             if r.get('booking_platform'):
                 st.session_state[f"{rname}_booking_platform"] = r['booking_platform']
+            if r.get('opentable_rid'):
+                st.session_state[f"{rname}_opentable_rid"] = r['opentable_rid']
+            if r.get('pull_data'):
+                st.session_state[f"{rname}_pull_data"] = bool(r['pull_data'])
             if r.get('checklist'):
                 try:
                     cl = json.loads(r['checklist'])
@@ -1173,13 +1201,19 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking, detected_rid = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
                         if ok and detected_booking:
                             st.session_state[f"{cleaned_name}_booking_platform"] = detected_booking
                             db.update_restaurant_booking(cleaned_name, detected_booking)
+                        # If OpenTable but no RID from HTML, search OpenTable.com
+                        if ok and detected_booking == "OpenTable" and not detected_rid:
+                            detected_rid = _search_opentable_rid(restaurant_input.strip())
+                        if ok and detected_rid:
+                            st.session_state[f"{cleaned_name}_opentable_rid"] = detected_rid
+                            db.update_restaurant_opentable_rid(cleaned_name, detected_rid)
                     except Exception:
                         pass
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
@@ -1290,6 +1324,16 @@ with tab_restaurants:
                     db.update_restaurant_notes(rest_name, notes_val)
 
             with col4:
+                # Pull Data flag — signals the CMS updater to pull this restaurant's data
+                pd_key = f"{rest_name}_pull_data"
+                st.session_state.setdefault(pd_key, False)
+                st.checkbox("Pull Data", key=pd_key)
+                pd_val = bool(st.session_state.get(pd_key, False))
+                pd_prev_key = f"{rest_name}_prev_pull_data"
+                if pd_val != st.session_state.get(pd_prev_key):
+                    st.session_state[pd_prev_key] = pd_val
+                    db.update_restaurant_pull_data(rest_name, pd_val)
+
                 _CHECKLIST_ITEMS = [
                     ('hosting', 'Create Hosting'),
                     ('cms', 'Updated CMS'),
@@ -1670,7 +1714,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking, detected_rid = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1686,6 +1730,14 @@ with tab_copy:
                         if not st.session_state.get(b_key):
                             st.session_state[b_key] = detected_booking
                             db.update_restaurant_booking(restaurant_name, detected_booking)
+                    # Auto-fill OpenTable RID if not already set
+                    if detected_booking == "OpenTable" and not detected_rid:
+                        detected_rid = _search_opentable_rid(restaurant_name.replace('_', ' '))
+                    if detected_rid:
+                        r_key = f"{restaurant_name}_opentable_rid"
+                        if not st.session_state.get(r_key):
+                            st.session_state[r_key] = detected_rid
+                            db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -1767,8 +1819,8 @@ with tab_brand:
         # --- Reservation ---
         st.subheader("Reservation")
         if detect_all and stored_url:
-            with st.spinner("Detecting brand color & booking platform..."):
-                ok, _, _, detected_color, detected_booking = scrape_website(stored_url)
+            with st.spinner("Detecting brand color, booking platform & OpenTable RID..."):
+                ok, _, _, detected_color, detected_booking, detected_rid = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
                 db.update_restaurant_color(restaurant_name, detected_color)
@@ -1776,13 +1828,35 @@ with tab_brand:
                 booking_key = f"{restaurant_name}_booking_platform"
                 st.session_state[booking_key] = detected_booking
                 db.update_restaurant_booking(restaurant_name, detected_booking)
-            if ok and (detected_color or detected_booking):
+            # If OpenTable detected but no RID from website, search OpenTable.com
+            if ok and detected_booking == "OpenTable" and not detected_rid:
+                display = restaurant_name.replace('_', ' ')
+                detected_rid = _search_opentable_rid(display)
+            if ok and detected_rid:
+                rid_key = f"{restaurant_name}_opentable_rid"
+                st.session_state[rid_key] = detected_rid
+                db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
+            if ok and (detected_color or detected_booking or detected_rid):
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
         booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
         if booking_val:
             st.caption(f"Booking platform: **{booking_val}**")
+
+        # --- OpenTable RID ---
+        if booking_val == "OpenTable":
+            rid_key = f"{restaurant_name}_opentable_rid"
+            current_rid = st.session_state.get(rid_key, "")
+            new_rid = st.text_input(
+                "OpenTable RID",
+                value=current_rid,
+                placeholder="e.g. 123456",
+                help="Numeric Restaurant ID used in OpenTable widgets. Auto-detected or enter manually.",
+            )
+            if new_rid != current_rid:
+                st.session_state[rid_key] = new_rid
+                db.update_restaurant_opentable_rid(restaurant_name, new_rid)
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
