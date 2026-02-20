@@ -359,19 +359,29 @@ def _extract_primary_color(soup, base_url):
 def _detect_booking_platform(html_bytes):
     """Detect whether a restaurant uses Resy or OpenTable from raw HTML.
 
-    Returns ("Resy", ""), ("OpenTable", rid), or ("", "").
+    Returns ("Resy", "", ""), ("OpenTable", rid, ""), or ("", "", tripleseat_form_id).
     When OpenTable is detected, also extracts the RID from widget/link URLs.
+    Also detects Tripleseat lead_form_id independently.
     """
     html_str = html_bytes.decode('utf-8', errors='ignore')
     html_lower = html_str.lower()
+
+    booking = ""
+    rid = ""
     if any(m in html_lower for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
-        return "Resy", ""
-    if any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
-        # Extract RID from OpenTable URLs (e.g. rid=123456)
+        booking = "Resy"
+    elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
+        booking = "OpenTable"
         rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
         rid = rid_match.group(1) if rid_match else ""
-        return "OpenTable", rid
-    return "", ""
+
+    # Detect Tripleseat lead_form_id (independent of booking platform)
+    ts_form_id = ""
+    if 'tripleseat.com' in html_lower:
+        ts_match = re.search(r'lead_form_id=(\d+)', html_str)
+        ts_form_id = ts_match.group(1) if ts_match else ""
+
+    return booking, rid, ts_form_id
 
 
 def _search_opentable_rid(restaurant_display_name):
@@ -397,7 +407,7 @@ def _search_opentable_rid(restaurant_display_name):
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform, opentable_rid).
+    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -409,19 +419,19 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", "", ""
+        return False, "", "Website took too long to respond. Please try again.", "", "", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", "", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     primary_color = _extract_primary_color(soup, base_url)
-    booking_platform, opentable_rid = _detect_booking_platform(response.content)
+    booking_platform, opentable_rid, tripleseat_form_id = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -467,10 +477,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid
+    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1100,6 +1110,8 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_booking_platform"] = r['booking_platform']
             if r.get('opentable_rid'):
                 st.session_state[f"{rname}_opentable_rid"] = r['opentable_rid']
+            if r.get('tripleseat_form_id'):
+                st.session_state[f"{rname}_tripleseat_form_id"] = r['tripleseat_form_id']
             if r.get('pull_data'):
                 st.session_state[f"{rname}_pull_data"] = bool(r['pull_data'])
             if r.get('checklist'):
@@ -1202,7 +1214,7 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking, detected_rid = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
@@ -1215,6 +1227,9 @@ with tab_restaurants:
                         if ok and detected_rid:
                             st.session_state[f"{cleaned_name}_opentable_rid"] = detected_rid
                             db.update_restaurant_opentable_rid(cleaned_name, detected_rid)
+                        if ok and detected_ts:
+                            st.session_state[f"{cleaned_name}_tripleseat_form_id"] = detected_ts
+                            db.update_restaurant_tripleseat(cleaned_name, detected_ts)
                     except Exception:
                         pass
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
@@ -1732,7 +1747,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking, detected_rid = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1756,6 +1771,12 @@ with tab_copy:
                         if not st.session_state.get(r_key):
                             st.session_state[r_key] = detected_rid
                             db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
+                    # Auto-fill Tripleseat form ID if not already set
+                    if detected_ts:
+                        ts_key = f"{restaurant_name}_tripleseat_form_id"
+                        if not st.session_state.get(ts_key):
+                            st.session_state[ts_key] = detected_ts
+                            db.update_restaurant_tripleseat(restaurant_name, detected_ts)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -1837,8 +1858,8 @@ with tab_brand:
         # --- Reservation ---
         st.subheader("Reservation")
         if detect_all and stored_url:
-            with st.spinner("Detecting brand color, booking platform & OpenTable RID..."):
-                ok, _, _, detected_color, detected_booking, detected_rid = scrape_website(stored_url)
+            with st.spinner("Detecting brand color, booking platform, OpenTable RID & Tripleseat..."):
+                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
                 db.update_restaurant_color(restaurant_name, detected_color)
@@ -1854,7 +1875,11 @@ with tab_brand:
                 rid_key = f"{restaurant_name}_opentable_rid"
                 st.session_state[rid_key] = detected_rid
                 db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
-            if ok and (detected_color or detected_booking or detected_rid):
+            if ok and detected_ts:
+                ts_key = f"{restaurant_name}_tripleseat_form_id"
+                st.session_state[ts_key] = detected_ts
+                db.update_restaurant_tripleseat(restaurant_name, detected_ts)
+            if ok and (detected_color or detected_booking or detected_rid or detected_ts):
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
@@ -1875,6 +1900,20 @@ with tab_brand:
             if new_rid != current_rid:
                 st.session_state[rid_key] = new_rid
                 db.update_restaurant_opentable_rid(restaurant_name, new_rid)
+
+        # --- Tripleseat Form ID ---
+        st.subheader("Group Bookings (Tripleseat)")
+        ts_key = f"{restaurant_name}_tripleseat_form_id"
+        current_ts = st.session_state.get(ts_key, "")
+        new_ts = st.text_input(
+            "Tripleseat Lead Form ID",
+            value=current_ts,
+            placeholder="e.g. 6616",
+            help="Numeric lead_form_id from Tripleseat embed script. Auto-detected or enter manually.",
+        )
+        if new_ts != current_ts:
+            st.session_state[ts_key] = new_ts
+            db.update_restaurant_tripleseat(restaurant_name, new_ts)
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
