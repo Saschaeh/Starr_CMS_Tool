@@ -27,6 +27,8 @@ except Exception:
     pass
 
 import db
+import importlib
+importlib.reload(db)
 
 # Initialize database on first run
 db.init_db()
