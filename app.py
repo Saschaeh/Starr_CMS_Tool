@@ -129,7 +129,6 @@ def render_copy_section(restaurant_name, section_id, section_label, word_min, wo
 
     st.text_area(
         f"Edit {section_label}",
-        value=st.session_state[section_key],
         key=section_key,
         height=height,
         placeholder="No content generated yet. Click 'Generate Copy' above to create content.",
@@ -1148,6 +1147,7 @@ image_mappings = {
     'Cuisine_1': (529, 767),
     'Cuisine_2': (696, 606),
     'Menu_1': (1321, 558),
+    'Group_Dining_1': (696, 696),
     'Chef_1': (600, 800),
     'Chef_2': (600, 800),
     'Chef_3': (600, 800),
@@ -1162,6 +1162,7 @@ fields = [
     ('Cuisine_1', "First Cuisine Image (Vertical)", "Target: 529x767px — Vertical image, ~2:3 aspect ratio."),
     ('Cuisine_2', "Second Cuisine Image (Landscape)", "Target: 696x606px — Landscape image, ~1.15:1 aspect ratio."),
     ('Menu_1', "Menu Image (Wide Horizontal)", "Target: 1321x558px — Wide horizontal image, ~2.4:1 aspect ratio."),
+    ('Group_Dining_1', "Group Dining Image (Square)", "Target: 696x696px — Square image, 1:1 aspect ratio."),
     ('Chef_1', "First Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
     ('Chef_2', "Second Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio."),
     ('Chef_3', "Third Chef Image (Vertical + Black&White)", "Target: 600x800px — Vertical image, 3:4 aspect ratio.")
@@ -1283,7 +1284,7 @@ with tab_restaurants:
                     f'<div class="rest-name">{star}{display_name}</div>'
                     f'{url_html}'
                     f'<div class="rest-stats">'
-                    f'<span class="progress-pill images">Images: {image_count}/8</span>'
+                    f'<span class="progress-pill images">Images: {image_count}/9</span>'
                     f'<span class="progress-pill chef">Chef: {chef_count}/3</span>'
                     f'</div>'
                     f'<div class="rest-stats" style="margin-top:0.3rem">'
@@ -1396,11 +1397,18 @@ with tab_images:
         st.header(f"Upload Images for {restaurant_name.replace('_', ' ')}")
 
         uploaded_files = {}
-        for i, (name, header, description) in enumerate(fields):
-            if name == 'Chef_1':
-                st.subheader("Optional Chef Pictures")
+        _CHEF_FIELDS_SET = {'Chef_1', 'Chef_2', 'Chef_3'}
+        _chef_expander = None
 
-            with st.container():
+        for i, (name, header, description) in enumerate(fields):
+            # Open chef expander when we reach chef fields
+            if name == 'Chef_1':
+                _chef_expander = st.expander("Chef Pictures (Optional)", expanded=False)
+
+            # Render inside expander for chef fields, normal flow otherwise
+            _parent = _chef_expander if name in _CHEF_FIELDS_SET else None
+
+            with (_parent if _parent else st.container()):
                 st.markdown(f"""
                 <div class="image-field-card">
                     <div class="field-title">{header}</div>
@@ -1525,7 +1533,10 @@ with tab_images:
 
                     # Save processed image to disk on fresh upload
                     img_buffer = io.BytesIO()
-                    resized_img.save(img_buffer, format=img_format, quality=95)
+                    if img_format == 'JPEG':
+                        resized_img.save(img_buffer, format='JPEG', quality=100, subsampling=0)
+                    else:
+                        resized_img.save(img_buffer, format=img_format)
                     img_buffer.seek(0)
                     img_bytes = img_buffer.getvalue()
 
@@ -1573,7 +1584,6 @@ with tab_images:
                     st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
                     new_alt = st.text_area(
                         f"Alt text for {header}",
-                        value=st.session_state[alt_key],
                         key=alt_key,
                         label_visibility="collapsed",
                         height=68
@@ -1582,8 +1592,12 @@ with tab_images:
                     if st.session_state[alt_key].strip():
                         copy_button(st.session_state[alt_key], f"copy_alt_{name}")
 
-            if i < len(fields) - 1:
-                st.markdown("---")
+                # Dividers between fields (skip right before chef expander)
+                if i < len(fields) - 1:
+                    next_is_chef = fields[i + 1][0] in _CHEF_FIELDS_SET
+                    curr_is_chef = name in _CHEF_FIELDS_SET
+                    if not (not curr_is_chef and next_is_chef):
+                        st.markdown("---")
 
         # Save all alt text changes with one button
         st.markdown("---")
@@ -1626,7 +1640,10 @@ with tab_images:
                                 new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
 
                                 img_buffer = io.BytesIO()
-                                resized_img.save(img_buffer, format=img_format, quality=95)
+                                if img_format == 'JPEG':
+                                    resized_img.save(img_buffer, format='JPEG', quality=100, subsampling=0)
+                                else:
+                                    resized_img.save(img_buffer, format=img_format)
                                 img_buffer.seek(0)
                                 zip_file.writestr(f"Resized/{new_filename}", img_buffer.read())
                 
