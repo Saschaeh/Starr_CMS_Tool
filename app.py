@@ -1887,59 +1887,10 @@ with tab_brand:
         with col_detect_right:
             detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
 
-        # --- Primary Color ---
-        st.subheader("Primary Color")
+        # --- Detect handler (runs before UI so state is ready) ---
         color_key = f"{restaurant_name}_primary_color"
-        canonical = st.session_state.get(color_key, "")
-
-        col_color_picker, col_color_hex, _ = st.columns(
-            [0.5, 1.5, 5.2], vertical_alignment="bottom"
-        )
-        with col_color_picker:
-            picked = st.color_picker(
-                "Pick color",
-                value=canonical or "#000000",
-                label_visibility="collapsed",
-            )
-        with col_color_hex:
-            typed = st.text_input(
-                "Hex color",
-                value=canonical,
-                placeholder="#000000",
-                label_visibility="collapsed",
-            )
-        # Sync: picker or hex input changes → update canonical + DB
-        if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
-            st.session_state[color_key] = typed
-            db.update_restaurant_color(restaurant_name, typed)
-        elif picked != (canonical or "#000000"):
-            st.session_state[color_key] = picked
-            db.update_restaurant_color(restaurant_name, picked)
-
-        # --- Logo ---
-        st.subheader("Logo")
-        logo_persisted_key = f"{restaurant_name}_Logo_persisted"
-        # Check DB on first load if not already flagged
-        if not st.session_state.get(logo_persisted_key):
-            if db.get_image_data(restaurant_name, "Logo"):
-                st.session_state[logo_persisted_key] = True
-        if st.session_state.get(logo_persisted_key):
-            logo_blob = db.get_image_data(restaurant_name, "Logo")
-            if logo_blob:
-                st.image(logo_blob, width=200)
-                if st.button("Remove Logo", key=f"{restaurant_name}_remove_logo"):
-                    db.delete_image(restaurant_name, "Logo")
-                    st.session_state[logo_persisted_key] = False
-                    st.rerun()
-            else:
-                st.session_state[logo_persisted_key] = False
-        else:
-            st.caption("No logo detected yet. Click **Detect** to crawl the website.")
-
-        # --- Reservation ---
-        st.subheader("Reservation")
         if detect_all and stored_url:
-            with st.spinner("Detecting brand color, logo, booking platform, OpenTable RID & Tripleseat..."):
+            with st.spinner("Detecting logo, brand color, booking platform, OpenTable RID & Tripleseat..."):
                 ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
@@ -1948,7 +1899,6 @@ with tab_brand:
                 booking_key = f"{restaurant_name}_booking_platform"
                 st.session_state[booking_key] = detected_booking
                 db.update_restaurant_booking(restaurant_name, detected_booking)
-            # If OpenTable detected but no RID from website, search OpenTable.com
             if ok and detected_booking == "OpenTable" and not detected_rid:
                 display = restaurant_name.replace('_', ' ')
                 detected_rid = _search_opentable_rid(display)
@@ -1960,7 +1910,6 @@ with tab_brand:
                 ts_key = f"{restaurant_name}_tripleseat_form_id"
                 st.session_state[ts_key] = detected_ts
                 db.update_restaurant_tripleseat(restaurant_name, detected_ts)
-            # Download and save logo
             logo_saved = False
             if ok and detected_logo:
                 try:
@@ -1976,11 +1925,61 @@ with tab_brand:
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
+
+        # ── Brand Identity: Logo + Color side by side ──
+        col_logo, col_color = st.columns([1, 2])
+
+        with col_logo:
+            st.subheader("Logo")
+            logo_persisted_key = f"{restaurant_name}_Logo_persisted"
+            if not st.session_state.get(logo_persisted_key):
+                if db.get_image_data(restaurant_name, "Logo"):
+                    st.session_state[logo_persisted_key] = True
+            if st.session_state.get(logo_persisted_key):
+                logo_blob = db.get_image_data(restaurant_name, "Logo")
+                if logo_blob:
+                    st.image(logo_blob, width=150)
+                    if st.button("Remove Logo", key=f"{restaurant_name}_remove_logo"):
+                        db.delete_image(restaurant_name, "Logo")
+                        st.session_state[logo_persisted_key] = False
+                        st.rerun()
+                else:
+                    st.session_state[logo_persisted_key] = False
+            if not st.session_state.get(logo_persisted_key):
+                st.caption("No logo detected yet. Click **Detect** to crawl the website.")
+
+        with col_color:
+            st.subheader("Primary Color")
+            canonical = st.session_state.get(color_key, "")
+            col_picker, col_hex, _ = st.columns(
+                [0.5, 1.5, 3], vertical_alignment="bottom"
+            )
+            with col_picker:
+                picked = st.color_picker(
+                    "Pick color",
+                    value=canonical or "#000000",
+                    label_visibility="collapsed",
+                )
+            with col_hex:
+                typed = st.text_input(
+                    "Hex color",
+                    value=canonical,
+                    placeholder="#000000",
+                    label_visibility="collapsed",
+                )
+            if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
+                st.session_state[color_key] = typed
+                db.update_restaurant_color(restaurant_name, typed)
+            elif picked != (canonical or "#000000"):
+                st.session_state[color_key] = picked
+                db.update_restaurant_color(restaurant_name, picked)
+
+        # ── Reservations & Bookings ──
+        st.subheader("Reservations & Bookings")
         booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
         if booking_val:
             st.caption(f"Booking platform: **{booking_val}**")
 
-        # --- OpenTable RID ---
         if booking_val == "OpenTable":
             rid_key = f"{restaurant_name}_opentable_rid"
             current_rid = st.session_state.get(rid_key, "")
@@ -1994,8 +1993,6 @@ with tab_brand:
                 st.session_state[rid_key] = new_rid
                 db.update_restaurant_opentable_rid(restaurant_name, new_rid)
 
-        # --- Tripleseat Form ID ---
-        st.subheader("Group Bookings (Tripleseat)")
         ts_key = f"{restaurant_name}_tripleseat_form_id"
         current_ts = st.session_state.get(ts_key, "")
         new_ts = st.text_input(
