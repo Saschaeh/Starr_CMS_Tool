@@ -1881,9 +1881,10 @@ with tab_brand:
         st.header("Brand & Reservation")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Brand & Reservation for {restaurant_name.replace('_', ' ')}")
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
-        _, col_detect_right = st.columns([6, 1])
+        col_header_left, col_detect_right = st.columns([6, 1], vertical_alignment="bottom")
+        with col_header_left:
+            st.header(f"Brand & Reservation for {restaurant_name.replace('_', ' ')}")
         with col_detect_right:
             detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
 
@@ -1980,30 +1981,32 @@ with tab_brand:
         if booking_val:
             st.caption(f"Booking platform: **{booking_val}**")
 
-        if booking_val == "OpenTable":
-            rid_key = f"{restaurant_name}_opentable_rid"
-            current_rid = st.session_state.get(rid_key, "")
-            new_rid = st.text_input(
-                "OpenTable RID",
-                value=current_rid,
-                placeholder="e.g. 123456",
-                help="Numeric Restaurant ID used in OpenTable widgets. Auto-detected or enter manually.",
+        col_ot, col_ts = st.columns(2)
+        with col_ot:
+            if booking_val == "OpenTable":
+                rid_key = f"{restaurant_name}_opentable_rid"
+                current_rid = st.session_state.get(rid_key, "")
+                new_rid = st.text_input(
+                    "OpenTable RID",
+                    value=current_rid,
+                    placeholder="e.g. 123456",
+                    help="Numeric Restaurant ID used in OpenTable widgets.",
+                )
+                if new_rid != current_rid:
+                    st.session_state[rid_key] = new_rid
+                    db.update_restaurant_opentable_rid(restaurant_name, new_rid)
+        with col_ts:
+            ts_key = f"{restaurant_name}_tripleseat_form_id"
+            current_ts = st.session_state.get(ts_key, "")
+            new_ts = st.text_input(
+                "Tripleseat Lead Form ID",
+                value=current_ts,
+                placeholder="e.g. 6616",
+                help="Numeric lead_form_id from Tripleseat embed script.",
             )
-            if new_rid != current_rid:
-                st.session_state[rid_key] = new_rid
-                db.update_restaurant_opentable_rid(restaurant_name, new_rid)
-
-        ts_key = f"{restaurant_name}_tripleseat_form_id"
-        current_ts = st.session_state.get(ts_key, "")
-        new_ts = st.text_input(
-            "Tripleseat Lead Form ID",
-            value=current_ts,
-            placeholder="e.g. 6616",
-            help="Numeric lead_form_id from Tripleseat embed script. Auto-detected or enter manually.",
-        )
-        if new_ts != current_ts:
-            st.session_state[ts_key] = new_ts
-            db.update_restaurant_tripleseat(restaurant_name, new_ts)
+            if new_ts != current_ts:
+                st.session_state[ts_key] = new_ts
+                db.update_restaurant_tripleseat(restaurant_name, new_ts)
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
