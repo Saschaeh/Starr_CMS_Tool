@@ -213,6 +213,16 @@ def save_image(restaurant, field_name, image_bytes, original_filename, alt_text=
     conn.commit()
 
 
+def delete_image(restaurant, field_name):
+    """Delete a single image record from the database."""
+    conn = get_connection()
+    conn.execute(
+        "DELETE FROM images WHERE restaurant = ? AND field_name = ?",
+        (restaurant, field_name)
+    )
+    conn.commit()
+
+
 def update_alt_text(restaurant, field_name, alt_text):
     conn = get_connection()
     conn.execute(

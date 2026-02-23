@@ -264,6 +264,55 @@ _COMMON_SUBPATHS = [
 ]
 
 
+def _extract_logo_url(soup, base_url):
+    """Extract the logo image URL from a webpage.
+
+    Strategy (in priority order):
+    1. <img> with class containing 'custom-logo' or 'site-logo'
+    2. <img> inside <header>/<nav> with 'logo' in class, id, or alt
+    3. <img> anywhere with 'logo' in class, id, or alt
+    4. <link rel="icon"> as last resort (skip tiny favicons)
+    """
+    def _has_logo_hint(tag):
+        classes = ' '.join(tag.get('class', []))
+        tag_id = tag.get('id', '')
+        alt = tag.get('alt', '')
+        return 'logo' in classes.lower() or 'logo' in tag_id.lower() or 'logo' in alt.lower()
+
+    # 1. <img> with explicit custom-logo / site-logo class
+    for img in soup.find_all('img', src=True):
+        classes = ' '.join(img.get('class', [])).lower()
+        if 'custom-logo' in classes or 'site-logo' in classes:
+            return urljoin(base_url, img['src'])
+
+    # 2. <img> inside <header> or <nav> with logo hint
+    for container in soup.find_all(['header', 'nav']):
+        for img in container.find_all('img', src=True):
+            if _has_logo_hint(img):
+                return urljoin(base_url, img['src'])
+
+    # 3. <img> anywhere with logo hint
+    for img in soup.find_all('img', src=True):
+        if _has_logo_hint(img):
+            return urljoin(base_url, img['src'])
+
+    # 4. <link rel="icon"> (skip tiny favicons)
+    for link in soup.find_all('link', rel=True):
+        rels = [r.lower() for r in link['rel']]
+        if 'icon' in rels and link.get('href'):
+            sizes = link.get('sizes', '')
+            if sizes:
+                try:
+                    w = int(sizes.split('x')[0])
+                    if w < 100:
+                        continue
+                except (ValueError, IndexError):
+                    pass
+            return urljoin(base_url, link['href'])
+
+    return ""
+
+
 def _extract_primary_color(soup, base_url):
     """Extract the likely primary brand color from a webpage.
 
@@ -409,7 +458,7 @@ def _search_opentable_rid(restaurant_display_name):
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id).
+    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -421,18 +470,19 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", "", "", ""
+        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", "", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     primary_color = _extract_primary_color(soup, base_url)
+    logo_url = _extract_logo_url(soup, base_url)
     booking_platform, opentable_rid, tripleseat_form_id = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
@@ -479,10 +529,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id
+    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1216,7 +1266,7 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
@@ -1232,6 +1282,15 @@ with tab_restaurants:
                         if ok and detected_ts:
                             st.session_state[f"{cleaned_name}_tripleseat_form_id"] = detected_ts
                             db.update_restaurant_tripleseat(cleaned_name, detected_ts)
+                        if ok and detected_logo:
+                            try:
+                                logo_resp = requests.get(detected_logo, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                                if logo_resp.status_code == 200 and logo_resp.content:
+                                    fname = detected_logo.rsplit('/', 1)[-1].split('?')[0] or "logo.png"
+                                    db.save_image(cleaned_name, "Logo", logo_resp.content, fname, alt_text='')
+                                    st.session_state[f"{cleaned_name}_Logo_persisted"] = True
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                 st.success(f"Restaurant '{restaurant_input}' added as: {cleaned_name}")
@@ -1749,7 +1808,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1857,11 +1916,31 @@ with tab_brand:
             st.session_state[color_key] = picked
             db.update_restaurant_color(restaurant_name, picked)
 
+        # --- Logo ---
+        st.subheader("Logo")
+        logo_persisted_key = f"{restaurant_name}_Logo_persisted"
+        # Check DB on first load if not already flagged
+        if not st.session_state.get(logo_persisted_key):
+            if db.get_image_data(restaurant_name, "Logo"):
+                st.session_state[logo_persisted_key] = True
+        if st.session_state.get(logo_persisted_key):
+            logo_blob = db.get_image_data(restaurant_name, "Logo")
+            if logo_blob:
+                st.image(logo_blob, width=200)
+                if st.button("Remove Logo", key=f"{restaurant_name}_remove_logo"):
+                    db.delete_image(restaurant_name, "Logo")
+                    st.session_state[logo_persisted_key] = False
+                    st.rerun()
+            else:
+                st.session_state[logo_persisted_key] = False
+        else:
+            st.caption("No logo detected yet. Click **Detect** to crawl the website.")
+
         # --- Reservation ---
         st.subheader("Reservation")
         if detect_all and stored_url:
-            with st.spinner("Detecting brand color, booking platform, OpenTable RID & Tripleseat..."):
-                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts = scrape_website(stored_url)
+            with st.spinner("Detecting brand color, logo, booking platform, OpenTable RID & Tripleseat..."):
+                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
                 db.update_restaurant_color(restaurant_name, detected_color)
@@ -1881,7 +1960,19 @@ with tab_brand:
                 ts_key = f"{restaurant_name}_tripleseat_form_id"
                 st.session_state[ts_key] = detected_ts
                 db.update_restaurant_tripleseat(restaurant_name, detected_ts)
-            if ok and (detected_color or detected_booking or detected_rid or detected_ts):
+            # Download and save logo
+            logo_saved = False
+            if ok and detected_logo:
+                try:
+                    logo_resp = requests.get(detected_logo, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                    if logo_resp.status_code == 200 and logo_resp.content:
+                        fname = detected_logo.rsplit('/', 1)[-1].split('?')[0] or "logo.png"
+                        db.save_image(restaurant_name, "Logo", logo_resp.content, fname, alt_text='')
+                        st.session_state[f"{restaurant_name}_Logo_persisted"] = True
+                        logo_saved = True
+                except Exception:
+                    pass
+            if ok and (detected_color or detected_booking or detected_rid or detected_ts or logo_saved):
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
