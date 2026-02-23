@@ -264,6 +264,43 @@ _COMMON_SUBPATHS = [
 ]
 
 
+def _extract_favicon_url(soup, base_url):
+    """Extract the site favicon/icon URL from a webpage.
+
+    Prefers apple-touch-icon (higher res), then icon with largest size, then any icon.
+    """
+    # 1. apple-touch-icon (usually 180x180)
+    for link in soup.find_all('link', rel=True):
+        rels = [r.lower() for r in link['rel']]
+        if 'apple-touch-icon' in rels and link.get('href'):
+            return urljoin(base_url, link['href'])
+
+    # 2. <link rel="icon"> — pick largest by sizes attribute
+    best_url = ""
+    best_size = 0
+    for link in soup.find_all('link', rel=True):
+        rels = [r.lower() for r in link['rel']]
+        if 'icon' in rels and link.get('href'):
+            sizes = link.get('sizes', '')
+            size = 0
+            if sizes:
+                try:
+                    size = int(sizes.split('x')[0])
+                except (ValueError, IndexError):
+                    pass
+            if size > best_size:
+                best_size = size
+                best_url = urljoin(base_url, link['href'])
+            elif not best_url:
+                best_url = urljoin(base_url, link['href'])
+
+    if best_url:
+        return best_url
+
+    # 3. Fallback: /favicon.ico
+    return urljoin(base_url, '/favicon.ico')
+
+
 def _extract_logo_url(soup, base_url):
     """Extract the logo image URL from a webpage.
 
@@ -458,7 +495,7 @@ def _search_opentable_rid(restaurant_display_name):
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url).
+    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -470,19 +507,20 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", ""
+        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
     primary_color = _extract_primary_color(soup, base_url)
     logo_url = _extract_logo_url(soup, base_url)
+    favicon_url = _extract_favicon_url(soup, base_url)
     booking_platform, opentable_rid, tripleseat_form_id = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
@@ -529,10 +567,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url
+    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1266,7 +1304,7 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
@@ -1289,6 +1327,15 @@ with tab_restaurants:
                                     fname = detected_logo.rsplit('/', 1)[-1].split('?')[0] or "logo.png"
                                     db.save_image(cleaned_name, "Logo", logo_resp.content, fname, alt_text='')
                                     st.session_state[f"{cleaned_name}_Logo_persisted"] = True
+                            except Exception:
+                                pass
+                        if ok and detected_favicon:
+                            try:
+                                fav_resp = requests.get(detected_favicon, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                                if fav_resp.status_code == 200 and fav_resp.content:
+                                    fname = detected_favicon.rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
+                                    db.save_image(cleaned_name, "Favicon", fav_resp.content, fname, alt_text='')
+                                    st.session_state[f"{cleaned_name}_Favicon_persisted"] = True
                             except Exception:
                                 pass
                     except Exception:
@@ -1808,7 +1855,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo, _detected_favicon = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1892,7 +1939,7 @@ with tab_brand:
         color_key = f"{restaurant_name}_primary_color"
         if detect_all and stored_url:
             with st.spinner("Detecting logo, brand color, booking platform, OpenTable RID & Tripleseat..."):
-                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo = scrape_website(stored_url)
+                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
                 db.update_restaurant_color(restaurant_name, detected_color)
@@ -1922,13 +1969,24 @@ with tab_brand:
                         logo_saved = True
                 except Exception:
                     pass
-            if ok and (detected_color or detected_booking or detected_rid or detected_ts or logo_saved):
+            favicon_saved = False
+            if ok and detected_favicon:
+                try:
+                    fav_resp = requests.get(detected_favicon, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                    if fav_resp.status_code == 200 and fav_resp.content:
+                        fname = detected_favicon.rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
+                        db.save_image(restaurant_name, "Favicon", fav_resp.content, fname, alt_text='')
+                        st.session_state[f"{restaurant_name}_Favicon_persisted"] = True
+                        favicon_saved = True
+                except Exception:
+                    pass
+            if ok and (detected_color or detected_booking or detected_rid or detected_ts or logo_saved or favicon_saved):
                 st.rerun()
             elif not ok or (not detected_color and not detected_booking):
                 st.warning("Could not detect brand color or booking platform from the website.")
 
-        # ── Brand Identity: Logo + Color side by side ──
-        col_logo, col_color = st.columns([1, 2])
+        # ── Brand Identity: Logo + Favicon + Color side by side ──
+        col_logo, col_favicon, col_color = st.columns([2, 1, 3])
 
         with col_logo:
             st.subheader("Logo")
@@ -1940,14 +1998,33 @@ with tab_brand:
                 logo_blob = db.get_image_data(restaurant_name, "Logo")
                 if logo_blob:
                     st.image(logo_blob, width=150)
-                    if st.button("Remove Logo", key=f"{restaurant_name}_remove_logo"):
+                    if st.button("Remove", key=f"{restaurant_name}_remove_logo"):
                         db.delete_image(restaurant_name, "Logo")
                         st.session_state[logo_persisted_key] = False
                         st.rerun()
                 else:
                     st.session_state[logo_persisted_key] = False
             if not st.session_state.get(logo_persisted_key):
-                st.caption("No logo detected yet. Click **Detect** to crawl the website.")
+                st.caption("No logo detected.")
+
+        with col_favicon:
+            st.subheader("Site Icon")
+            fav_persisted_key = f"{restaurant_name}_Favicon_persisted"
+            if not st.session_state.get(fav_persisted_key):
+                if db.get_image_data(restaurant_name, "Favicon"):
+                    st.session_state[fav_persisted_key] = True
+            if st.session_state.get(fav_persisted_key):
+                fav_blob = db.get_image_data(restaurant_name, "Favicon")
+                if fav_blob:
+                    st.image(fav_blob, width=48)
+                    if st.button("Remove", key=f"{restaurant_name}_remove_favicon"):
+                        db.delete_image(restaurant_name, "Favicon")
+                        st.session_state[fav_persisted_key] = False
+                        st.rerun()
+                else:
+                    st.session_state[fav_persisted_key] = False
+            if not st.session_state.get(fav_persisted_key):
+                st.caption("No icon detected.")
 
         with col_color:
             st.subheader("Primary Color")
