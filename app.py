@@ -2016,7 +2016,7 @@ with tab_brand:
                     st.session_state[logo_persisted_key] = True
                     st.rerun()
                 logo_url_input = st.text_input("Or paste URL", key=f"{restaurant_name}_logo_url", placeholder="https://...")
-                if logo_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_logo"):
+                if st.button("Fetch", key=f"{restaurant_name}_fetch_logo") and logo_url_input:
                     try:
                         resp = requests.get(logo_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
                         if resp.status_code == 200 and resp.content:
@@ -2057,7 +2057,7 @@ with tab_brand:
                     st.session_state[fav_persisted_key] = True
                     st.rerun()
                 fav_url_input = st.text_input("Or paste URL", key=f"{restaurant_name}_favicon_url", placeholder="https://...")
-                if fav_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_favicon"):
+                if st.button("Fetch", key=f"{restaurant_name}_fetch_favicon") and fav_url_input:
                     try:
                         resp = requests.get(fav_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
                         if resp.status_code == 200 and resp.content:
