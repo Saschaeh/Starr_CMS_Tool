@@ -1994,7 +1994,8 @@ with tab_brand:
             if not st.session_state.get(logo_persisted_key):
                 if db.get_image_data(restaurant_name, "Logo"):
                     st.session_state[logo_persisted_key] = True
-            if st.session_state.get(logo_persisted_key):
+            has_logo = st.session_state.get(logo_persisted_key, False)
+            if has_logo:
                 logo_blob = db.get_image_data(restaurant_name, "Logo")
                 if logo_blob:
                     st.image(logo_blob, width=150)
@@ -2003,27 +2004,30 @@ with tab_brand:
                         st.session_state[logo_persisted_key] = False
                         st.rerun()
                 else:
+                    has_logo = False
                     st.session_state[logo_persisted_key] = False
-            if not st.session_state.get(logo_persisted_key):
+            if not has_logo:
                 st.caption("No logo detected.")
-            logo_file = st.file_uploader("Upload logo", type=["png", "jpg", "jpeg", "gif", "svg", "webp"], key=f"{restaurant_name}_upload_logo")
-            if logo_file:
-                db.save_image(restaurant_name, "Logo", logo_file.read(), logo_file.name)
-                st.session_state[logo_persisted_key] = True
-                st.rerun()
-            logo_url_input = st.text_input("Or paste logo URL", key=f"{restaurant_name}_logo_url", placeholder="https://...")
-            if logo_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_logo"):
-                try:
-                    resp = requests.get(logo_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-                    if resp.status_code == 200 and resp.content:
-                        fname = logo_url_input.rsplit("/", 1)[-1].split("?")[0] or "logo.png"
-                        db.save_image(restaurant_name, "Logo", resp.content, fname)
-                        st.session_state[logo_persisted_key] = True
-                        st.rerun()
-                    else:
-                        st.error("Could not download image from that URL.")
-                except Exception as e:
-                    st.error(f"Failed to fetch logo: {e}")
+            _logo_container = st.expander("Replace logo" if has_logo else "Add logo")
+            with _logo_container:
+                logo_file = st.file_uploader("Upload file", type=["png", "jpg", "jpeg", "gif", "svg", "webp"], key=f"{restaurant_name}_upload_logo")
+                if logo_file:
+                    db.save_image(restaurant_name, "Logo", logo_file.read(), logo_file.name)
+                    st.session_state[logo_persisted_key] = True
+                    st.rerun()
+                logo_url_input = st.text_input("Or paste URL", key=f"{restaurant_name}_logo_url", placeholder="https://...")
+                if logo_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_logo"):
+                    try:
+                        resp = requests.get(logo_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                        if resp.status_code == 200 and resp.content:
+                            fname = logo_url_input.rsplit("/", 1)[-1].split("?")[0] or "logo.png"
+                            db.save_image(restaurant_name, "Logo", resp.content, fname)
+                            st.session_state[logo_persisted_key] = True
+                            st.rerun()
+                        else:
+                            st.error("Could not download image from that URL.")
+                    except Exception as e:
+                        st.error(f"Failed to fetch logo: {e}")
 
         with col_favicon:
             st.subheader("Site Icon")
@@ -2031,7 +2035,8 @@ with tab_brand:
             if not st.session_state.get(fav_persisted_key):
                 if db.get_image_data(restaurant_name, "Favicon"):
                     st.session_state[fav_persisted_key] = True
-            if st.session_state.get(fav_persisted_key):
+            has_favicon = st.session_state.get(fav_persisted_key, False)
+            if has_favicon:
                 fav_blob = db.get_image_data(restaurant_name, "Favicon")
                 if fav_blob:
                     st.image(fav_blob, width=48)
@@ -2040,27 +2045,30 @@ with tab_brand:
                         st.session_state[fav_persisted_key] = False
                         st.rerun()
                 else:
+                    has_favicon = False
                     st.session_state[fav_persisted_key] = False
-            if not st.session_state.get(fav_persisted_key):
+            if not has_favicon:
                 st.caption("No icon detected.")
-            fav_file = st.file_uploader("Upload icon", type=["png", "jpg", "jpeg", "gif", "svg", "ico", "webp"], key=f"{restaurant_name}_upload_favicon")
-            if fav_file:
-                db.save_image(restaurant_name, "Favicon", fav_file.read(), fav_file.name)
-                st.session_state[fav_persisted_key] = True
-                st.rerun()
-            fav_url_input = st.text_input("Or paste icon URL", key=f"{restaurant_name}_favicon_url", placeholder="https://...")
-            if fav_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_favicon"):
-                try:
-                    resp = requests.get(fav_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-                    if resp.status_code == 200 and resp.content:
-                        fname = fav_url_input.rsplit("/", 1)[-1].split("?")[0] or "favicon.png"
-                        db.save_image(restaurant_name, "Favicon", resp.content, fname)
-                        st.session_state[fav_persisted_key] = True
-                        st.rerun()
-                    else:
-                        st.error("Could not download image from that URL.")
-                except Exception as e:
-                    st.error(f"Failed to fetch icon: {e}")
+            _fav_container = st.expander("Replace icon" if has_favicon else "Add icon")
+            with _fav_container:
+                fav_file = st.file_uploader("Upload file", type=["png", "jpg", "jpeg", "gif", "svg", "ico", "webp"], key=f"{restaurant_name}_upload_favicon")
+                if fav_file:
+                    db.save_image(restaurant_name, "Favicon", fav_file.read(), fav_file.name)
+                    st.session_state[fav_persisted_key] = True
+                    st.rerun()
+                fav_url_input = st.text_input("Or paste URL", key=f"{restaurant_name}_favicon_url", placeholder="https://...")
+                if fav_url_input and st.button("Fetch", key=f"{restaurant_name}_fetch_favicon"):
+                    try:
+                        resp = requests.get(fav_url_input, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                        if resp.status_code == 200 and resp.content:
+                            fname = fav_url_input.rsplit("/", 1)[-1].split("?")[0] or "favicon.png"
+                            db.save_image(restaurant_name, "Favicon", resp.content, fname)
+                            st.session_state[fav_persisted_key] = True
+                            st.rerun()
+                        else:
+                            st.error("Could not download image from that URL.")
+                    except Exception as e:
+                        st.error(f"Failed to fetch icon: {e}")
 
         with col_color:
             st.subheader("Primary Color")
