@@ -102,6 +102,9 @@ def init_db():
     for sql in stmts:
         conn.execute(sql)
     # Migrate: add columns if missing (existing databases)
+    # Commit each ALTER individually — on Turso/libsql a failed ALTER
+    # (column already exists) can taint the transaction, so we commit
+    # after each success to keep the connection clean.
     for col, col_def in [
         ('notes', "TEXT DEFAULT ''"),
         ('primary_color', "TEXT DEFAULT ''"),
@@ -125,9 +128,9 @@ def init_db():
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
+            conn.commit()
         except Exception:
             pass  # column already exists
-    conn.commit()
 
 
 # ─── Restaurant CRUD ─────────────────────────────────────────────────────────
