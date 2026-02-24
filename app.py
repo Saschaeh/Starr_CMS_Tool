@@ -501,18 +501,28 @@ def _detect_site_metadata(html_bytes):
             result['instagram_url'] = f"https://www.instagram.com/{slug}"
 
     # --- Phone ---
+    # 1) Try tel: href
     tel_match = re.search(r'href=["\']tel:([^"\']+)["\']', html_str, re.IGNORECASE)
     if tel_match:
         raw = re.sub(r'[^\d]', '', tel_match.group(1))
-        # Strip leading country code 1
         if len(raw) == 11 and raw.startswith('1'):
             raw = raw[1:]
         if len(raw) == 10:
             result['phone'] = f"({raw[:3]}) {raw[3:6]}-{raw[6:]}"
+    # 2) Try aria-label or title with phone number
     if not result['phone']:
-        phone_text = re.search(r'PHONE:\s*\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})', html_str)
-        if phone_text:
-            result['phone'] = f"({phone_text.group(1)}) {phone_text.group(2)}-{phone_text.group(3)}"
+        aria_match = re.search(r'(?:aria-label|title)="[^"]*?(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})', html_str)
+        if aria_match:
+            raw = re.sub(r'[^\d]', '', aria_match.group(1))
+            if len(raw) == 10:
+                result['phone'] = f"({raw[:3]}) {raw[3:6]}-{raw[6:]}"
+    # 3) Try PHONE: label followed by number (stripping HTML tags)
+    if not result['phone']:
+        phone_block = re.search(r'PHONE:.*?(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})', html_str, re.IGNORECASE | re.DOTALL)
+        if phone_block:
+            raw = re.sub(r'[^\d]', '', phone_block.group(1))
+            if len(raw) == 10:
+                result['phone'] = f"({raw[:3]}) {raw[3:6]}-{raw[6:]}"
 
     # --- Emails (starr-restaurants.com) ---
     emails = re.findall(r'([a-z0-9._-]+\.(?:info|events|marketing|press)@starr-restaurants\.com)', html_str, re.IGNORECASE)
