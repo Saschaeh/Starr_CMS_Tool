@@ -467,8 +467,14 @@ def _detect_site_metadata(html_bytes):
     # --- Booking platform ---
     if any(m in html_lower for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
         result['booking'] = "Resy"
+        # Try long form first (cities/{city}/venues/{slug}), then short form (cities/{code}/{slug})
         resy_match = re.search(r'https?://resy\.com/cities/[a-z0-9-]+/venues/[a-z0-9-]+', html_str, re.IGNORECASE)
-        result['resy_url'] = resy_match.group(0) if resy_match else ""
+        if not resy_match:
+            resy_match = re.search(r'resy\.com/cities/([a-z0-9-]+)/([a-z0-9-]+)', html_str, re.IGNORECASE)
+            if resy_match:
+                result['resy_url'] = f"https://resy.com/cities/{resy_match.group(1)}/{resy_match.group(2)}"
+        if resy_match and not result['resy_url']:
+            result['resy_url'] = resy_match.group(0)
     elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
         result['booking'] = "OpenTable"
         rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
