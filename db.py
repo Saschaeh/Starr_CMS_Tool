@@ -112,6 +112,15 @@ def init_db():
         ('tripleseat_form_id', "TEXT DEFAULT ''"),
         ('resy_url', "TEXT DEFAULT ''"),
         ('mailing_list_url', "TEXT DEFAULT ''"),
+        ('facebook_url', "TEXT DEFAULT ''"),
+        ('instagram_url', "TEXT DEFAULT ''"),
+        ('phone', "TEXT DEFAULT ''"),
+        ('email_general', "TEXT DEFAULT ''"),
+        ('email_events', "TEXT DEFAULT ''"),
+        ('email_marketing', "TEXT DEFAULT ''"),
+        ('email_press', "TEXT DEFAULT ''"),
+        ('address', "TEXT DEFAULT ''"),
+        ('google_maps_url', "TEXT DEFAULT ''"),
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
@@ -179,6 +188,60 @@ def update_restaurant_mailing_list_url(name, mailing_list_url):
     conn.commit()
 
 
+def update_restaurant_facebook_url(name, facebook_url):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET facebook_url = ? WHERE name = ?", (facebook_url, name))
+    conn.commit()
+
+
+def update_restaurant_instagram_url(name, instagram_url):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET instagram_url = ? WHERE name = ?", (instagram_url, name))
+    conn.commit()
+
+
+def update_restaurant_phone(name, phone):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET phone = ? WHERE name = ?", (phone, name))
+    conn.commit()
+
+
+def update_restaurant_email_general(name, email_general):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET email_general = ? WHERE name = ?", (email_general, name))
+    conn.commit()
+
+
+def update_restaurant_email_events(name, email_events):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET email_events = ? WHERE name = ?", (email_events, name))
+    conn.commit()
+
+
+def update_restaurant_email_marketing(name, email_marketing):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET email_marketing = ? WHERE name = ?", (email_marketing, name))
+    conn.commit()
+
+
+def update_restaurant_email_press(name, email_press):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET email_press = ? WHERE name = ?", (email_press, name))
+    conn.commit()
+
+
+def update_restaurant_address(name, address):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET address = ? WHERE name = ?", (address, name))
+    conn.commit()
+
+
+def update_restaurant_google_maps_url(name, google_maps_url):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET google_maps_url = ? WHERE name = ?", (google_maps_url, name))
+    conn.commit()
+
+
 def update_restaurant_pull_data(name, pull_data):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET pull_data = ? WHERE name = ?", (int(pull_data), name))
@@ -186,9 +249,15 @@ def update_restaurant_pull_data(name, pull_data):
 
 
 def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url, mailing_list_url."""
+    """Return list of dicts with all restaurant columns."""
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url, mailing_list_url FROM restaurants ORDER BY display_name COLLATE NOCASE")
+    cur = conn.execute(
+        "SELECT name, display_name, website_url, notes, primary_color, checklist,"
+        " booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url,"
+        " mailing_list_url, facebook_url, instagram_url, phone, email_general,"
+        " email_events, email_marketing, email_press, address, google_maps_url"
+        " FROM restaurants ORDER BY display_name COLLATE NOCASE"
+    )
     results = _rows_to_dicts(cur)
     return results
 

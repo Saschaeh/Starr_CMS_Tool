@@ -444,46 +444,96 @@ def _extract_primary_color(soup, base_url):
     return ""
 
 
-def _detect_booking_platform(html_bytes):
-    """Detect whether a restaurant uses Resy or OpenTable from raw HTML.
+def _detect_site_metadata(html_bytes):
+    """Extract booking, social, contact, and address metadata from raw HTML.
 
-    Returns (booking, opentable_rid, tripleseat_form_id, resy_url, mailing_list_url).
-    When OpenTable is detected, also extracts the RID from widget/link URLs.
-    When Resy is detected, extracts the full resy.com/cities/... venue URL.
-    Also detects Tripleseat lead_form_id and mailing list signup URLs independently.
+    Returns a dict with keys: booking, opentable_rid, tripleseat_form_id,
+    resy_url, mailing_list_url, facebook_url, instagram_url, phone,
+    email_general, email_events, email_marketing, email_press,
+    address, google_maps_url.
     """
     html_str = html_bytes.decode('utf-8', errors='ignore')
     html_lower = html_str.lower()
 
-    booking = ""
-    rid = ""
-    resy_url = ""
-    if any(m in html_lower for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
-        booking = "Resy"
-        # Extract full Resy venue URL (e.g. https://resy.com/cities/new-york-ny/venues/upland)
-        resy_match = re.search(r'https?://resy\.com/cities/[a-z0-9-]+/venues/[a-z0-9-]+', html_str, re.IGNORECASE)
-        resy_url = resy_match.group(0) if resy_match else ""
-    elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
-        booking = "OpenTable"
-        rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
-        rid = rid_match.group(1) if rid_match else ""
+    result = {
+        'booking': '', 'opentable_rid': '', 'tripleseat_form_id': '',
+        'resy_url': '', 'mailing_list_url': '',
+        'facebook_url': '', 'instagram_url': '',
+        'phone': '', 'email_general': '', 'email_events': '',
+        'email_marketing': '', 'email_press': '',
+        'address': '', 'google_maps_url': '',
+    }
 
-    # Detect Tripleseat lead_form_id (independent of booking platform)
-    ts_form_id = ""
+    # --- Booking platform ---
+    if any(m in html_lower for m in ('widgets.resy.com', 'resywidget', 'resy.com/cities/')):
+        result['booking'] = "Resy"
+        resy_match = re.search(r'https?://resy\.com/cities/[a-z0-9-]+/venues/[a-z0-9-]+', html_str, re.IGNORECASE)
+        result['resy_url'] = resy_match.group(0) if resy_match else ""
+    elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
+        result['booking'] = "OpenTable"
+        rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
+        result['opentable_rid'] = rid_match.group(1) if rid_match else ""
+
+    # --- Tripleseat ---
     if 'tripleseat.com' in html_lower:
         ts_match = re.search(r'lead_form_id=(\d+)', html_str)
-        ts_form_id = ts_match.group(1) if ts_match else ""
+        result['tripleseat_form_id'] = ts_match.group(1) if ts_match else ""
 
-    # Detect mailing list signup URL (Emma, Mailchimp, Campaign Monitor, etc.)
-    mailing_list_url = ""
+    # --- Mailing list ---
     mail_match = re.search(
         r'https?://(?:signup\.e2ma\.net/signup/\d+/\d+|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
         html_str, re.IGNORECASE
     )
     if mail_match:
-        mailing_list_url = mail_match.group(0).rstrip('/')
+        result['mailing_list_url'] = mail_match.group(0).rstrip('/')
 
-    return booking, rid, ts_form_id, resy_url, mailing_list_url
+    # --- Social media ---
+    fb_match = re.search(r'href=["\']https?://(?:www\.)?facebook\.com/([^"\']+)["\']', html_str, re.IGNORECASE)
+    if fb_match:
+        slug = fb_match.group(1).rstrip('/')
+        if slug.lower() not in ('starrrestaurants', 'starr-restaurants', 'starr.restaurants'):
+            result['facebook_url'] = f"https://www.facebook.com/{slug}"
+
+    ig_match = re.search(r'href=["\']https?://(?:www\.)?instagram\.com/([^"\']+)["\']', html_str, re.IGNORECASE)
+    if ig_match:
+        slug = ig_match.group(1).rstrip('/')
+        if slug.lower() not in ('starrrestaurants', 'starr_restaurants', 'starr.restaurants'):
+            result['instagram_url'] = f"https://www.instagram.com/{slug}"
+
+    # --- Phone ---
+    tel_match = re.search(r'href=["\']tel:\+?1?-?([^"\']+)["\']', html_str, re.IGNORECASE)
+    if tel_match:
+        raw = tel_match.group(1).replace('-', '').replace('.', '').replace(' ', '').replace('(', '').replace(')', '')
+        if len(raw) == 10 and raw.isdigit():
+            result['phone'] = f"({raw[:3]}) {raw[3:6]}-{raw[6:]}"
+    if not result['phone']:
+        phone_text = re.search(r'PHONE:\s*\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})', html_str)
+        if phone_text:
+            result['phone'] = f"({phone_text.group(1)}) {phone_text.group(2)}-{phone_text.group(3)}"
+
+    # --- Emails (starr-restaurants.com) ---
+    emails = re.findall(r'([a-z0-9._-]+\.(?:info|events|marketing|press)@starr-restaurants\.com)', html_str, re.IGNORECASE)
+    for email in emails:
+        lower = email.lower()
+        if '.info@' in lower and not result['email_general']:
+            result['email_general'] = email
+        elif '.events@' in lower and not result['email_events']:
+            result['email_events'] = email
+        elif '.marketing@' in lower and not result['email_marketing']:
+            result['email_marketing'] = email
+        elif '.press@' in lower and not result['email_press']:
+            result['email_press'] = email
+
+    # --- Address + Google Maps URL ---
+    soup = BeautifulSoup(html_str, 'html.parser')
+    maps_link = soup.find('a', href=re.compile(r'google\.com/maps/place/', re.IGNORECASE))
+    if maps_link:
+        result['google_maps_url'] = maps_link['href']
+        addr_text = maps_link.get_text(separator=', ').strip()
+        if addr_text:
+            result['address'] = addr_text
+
+    return result
 
 
 def _search_opentable_rid(restaurant_display_name):
@@ -509,8 +559,13 @@ def _search_opentable_rid(restaurant_display_name):
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url, mailing_list_url).
+    Returns (ok, text, error, detected) where detected is a dict with keys:
+    primary_color, logo_url, favicon_url, booking, opentable_rid,
+    tripleseat_form_id, resy_url, mailing_list_url, facebook_url,
+    instagram_url, phone, email_general, email_events, email_marketing,
+    email_press, address, google_maps_url.
     """
+    empty = {}
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
 
@@ -521,21 +576,21 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", "", "", "", ""
+        return False, "", "Website took too long to respond. Please try again.", empty
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", "", "", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", empty
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", "", "", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", empty
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", "", "", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", empty
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
     base_url = f"{parsed_base.scheme}://{parsed_base.netloc}"
-    primary_color = _extract_primary_color(soup, base_url)
-    logo_url = _extract_logo_url(soup, base_url)
-    favicon_url = _extract_favicon_url(soup, base_url)
-    booking_platform, opentable_rid, tripleseat_form_id, resy_url, mailing_list_url = _detect_booking_platform(response.content)
+    detected = _detect_site_metadata(response.content)
+    detected['primary_color'] = _extract_primary_color(soup, base_url)
+    detected['logo_url'] = _extract_logo_url(soup, base_url)
+    detected['favicon_url'] = _extract_favicon_url(soup, base_url)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -581,10 +636,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", "", "", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", empty
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url, mailing_list_url
+    return True, combined_text[:8000], "", detected
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1220,6 +1275,11 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_resy_url"] = r['resy_url']
             if r.get('mailing_list_url'):
                 st.session_state[f"{rname}_mailing_list_url"] = r['mailing_list_url']
+            for _fld in ('facebook_url', 'instagram_url', 'phone', 'email_general',
+                         'email_events', 'email_marketing', 'email_press',
+                         'address', 'google_maps_url'):
+                if r.get(_fld):
+                    st.session_state[f"{rname}_{_fld}"] = r[_fld]
             if r.get('pull_data'):
                 st.session_state[f"{rname}_pull_data"] = bool(r['pull_data'])
             if r.get('checklist'):
@@ -1322,42 +1382,59 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy, detected_mail = scrape_website(url_val)
-                        if ok and detected_color:
-                            st.session_state[f"{cleaned_name}_primary_color"] = detected_color
-                            db.update_restaurant_color(cleaned_name, detected_color)
-                        if ok and detected_booking:
-                            st.session_state[f"{cleaned_name}_booking_platform"] = detected_booking
-                            db.update_restaurant_booking(cleaned_name, detected_booking)
+                        ok, _, _, d = scrape_website(url_val)
+                        if ok and d.get('primary_color'):
+                            st.session_state[f"{cleaned_name}_primary_color"] = d['primary_color']
+                            db.update_restaurant_color(cleaned_name, d['primary_color'])
+                        if ok and d.get('booking'):
+                            st.session_state[f"{cleaned_name}_booking_platform"] = d['booking']
+                            db.update_restaurant_booking(cleaned_name, d['booking'])
                         # If OpenTable but no RID from HTML, search OpenTable.com
-                        if ok and detected_booking == "OpenTable" and not detected_rid:
-                            detected_rid = _search_opentable_rid(restaurant_input.strip())
-                        if ok and detected_rid:
-                            st.session_state[f"{cleaned_name}_opentable_rid"] = detected_rid
-                            db.update_restaurant_opentable_rid(cleaned_name, detected_rid)
-                        if ok and detected_ts:
-                            st.session_state[f"{cleaned_name}_tripleseat_form_id"] = detected_ts
-                            db.update_restaurant_tripleseat(cleaned_name, detected_ts)
-                        if ok and detected_resy:
-                            st.session_state[f"{cleaned_name}_resy_url"] = detected_resy
-                            db.update_restaurant_resy_url(cleaned_name, detected_resy)
-                        if ok and detected_mail:
-                            st.session_state[f"{cleaned_name}_mailing_list_url"] = detected_mail
-                            db.update_restaurant_mailing_list_url(cleaned_name, detected_mail)
-                        if ok and detected_logo:
+                        if ok and d.get('booking') == "OpenTable" and not d.get('opentable_rid'):
+                            d['opentable_rid'] = _search_opentable_rid(restaurant_input.strip())
+                        if ok and d.get('opentable_rid'):
+                            st.session_state[f"{cleaned_name}_opentable_rid"] = d['opentable_rid']
+                            db.update_restaurant_opentable_rid(cleaned_name, d['opentable_rid'])
+                        if ok and d.get('tripleseat_form_id'):
+                            st.session_state[f"{cleaned_name}_tripleseat_form_id"] = d['tripleseat_form_id']
+                            db.update_restaurant_tripleseat(cleaned_name, d['tripleseat_form_id'])
+                        if ok and d.get('resy_url'):
+                            st.session_state[f"{cleaned_name}_resy_url"] = d['resy_url']
+                            db.update_restaurant_resy_url(cleaned_name, d['resy_url'])
+                        if ok and d.get('mailing_list_url'):
+                            st.session_state[f"{cleaned_name}_mailing_list_url"] = d['mailing_list_url']
+                            db.update_restaurant_mailing_list_url(cleaned_name, d['mailing_list_url'])
+                        # Store new metadata fields
+                        _new_fields = {
+                            'facebook_url': db.update_restaurant_facebook_url,
+                            'instagram_url': db.update_restaurant_instagram_url,
+                            'phone': db.update_restaurant_phone,
+                            'email_general': db.update_restaurant_email_general,
+                            'email_events': db.update_restaurant_email_events,
+                            'email_marketing': db.update_restaurant_email_marketing,
+                            'email_press': db.update_restaurant_email_press,
+                            'address': db.update_restaurant_address,
+                            'google_maps_url': db.update_restaurant_google_maps_url,
+                        }
+                        if ok:
+                            for fkey, db_fn in _new_fields.items():
+                                if d.get(fkey):
+                                    st.session_state[f"{cleaned_name}_{fkey}"] = d[fkey]
+                                    db_fn(cleaned_name, d[fkey])
+                        if ok and d.get('logo_url'):
                             try:
-                                logo_resp = requests.get(detected_logo, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                                logo_resp = requests.get(d['logo_url'], headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
                                 if logo_resp.status_code == 200 and logo_resp.content:
-                                    fname = detected_logo.rsplit('/', 1)[-1].split('?')[0] or "logo.png"
+                                    fname = d['logo_url'].rsplit('/', 1)[-1].split('?')[0] or "logo.png"
                                     db.save_image(cleaned_name, "Logo", logo_resp.content, fname, alt_text='')
                                     st.session_state[f"{cleaned_name}_Logo_persisted"] = True
                             except Exception:
                                 pass
-                        if ok and detected_favicon:
+                        if ok and d.get('favicon_url'):
                             try:
-                                fav_resp = requests.get(detected_favicon, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                                fav_resp = requests.get(d['favicon_url'], headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
                                 if fav_resp.status_code == 200 and fav_resp.content:
-                                    fname = detected_favicon.rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
+                                    fname = d['favicon_url'].rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
                                     db.save_image(cleaned_name, "Favicon", fav_resp.content, fname, alt_text='')
                                     st.session_state[f"{cleaned_name}_Favicon_persisted"] = True
                             except Exception:
@@ -1898,48 +1975,39 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo, _detected_favicon, detected_resy, detected_mail = scrape_website(stored_url)
+                    ok, content, err, d = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
-                    # Auto-fill primary color if not already set
-                    if detected_color:
-                        c_key = f"{restaurant_name}_primary_color"
-                        if not st.session_state.get(c_key):
-                            st.session_state[c_key] = detected_color
-                            db.update_restaurant_color(restaurant_name, detected_color)
-                    # Auto-fill booking platform if not already set
-                    if detected_booking:
-                        b_key = f"{restaurant_name}_booking_platform"
-                        if not st.session_state.get(b_key):
-                            st.session_state[b_key] = detected_booking
-                            db.update_restaurant_booking(restaurant_name, detected_booking)
+                    # Auto-fill detected fields if not already set
+                    _autofill = [
+                        ('primary_color', f"{restaurant_name}_primary_color", db.update_restaurant_color),
+                        ('booking', f"{restaurant_name}_booking_platform", db.update_restaurant_booking),
+                        ('tripleseat_form_id', f"{restaurant_name}_tripleseat_form_id", db.update_restaurant_tripleseat),
+                        ('resy_url', f"{restaurant_name}_resy_url", db.update_restaurant_resy_url),
+                        ('mailing_list_url', f"{restaurant_name}_mailing_list_url", db.update_restaurant_mailing_list_url),
+                        ('facebook_url', f"{restaurant_name}_facebook_url", db.update_restaurant_facebook_url),
+                        ('instagram_url', f"{restaurant_name}_instagram_url", db.update_restaurant_instagram_url),
+                        ('phone', f"{restaurant_name}_phone", db.update_restaurant_phone),
+                        ('email_general', f"{restaurant_name}_email_general", db.update_restaurant_email_general),
+                        ('email_events', f"{restaurant_name}_email_events", db.update_restaurant_email_events),
+                        ('email_marketing', f"{restaurant_name}_email_marketing", db.update_restaurant_email_marketing),
+                        ('email_press', f"{restaurant_name}_email_press", db.update_restaurant_email_press),
+                        ('address', f"{restaurant_name}_address", db.update_restaurant_address),
+                        ('google_maps_url', f"{restaurant_name}_google_maps_url", db.update_restaurant_google_maps_url),
+                    ]
+                    for dkey, skey, db_fn in _autofill:
+                        if d.get(dkey) and not st.session_state.get(skey):
+                            st.session_state[skey] = d[dkey]
+                            db_fn(restaurant_name, d[dkey])
                     # Auto-fill OpenTable RID if not already set
-                    if detected_booking == "OpenTable" and not detected_rid:
-                        detected_rid = _search_opentable_rid(restaurant_name.replace('_', ' '))
-                    if detected_rid:
+                    if d.get('booking') == "OpenTable" and not d.get('opentable_rid'):
+                        d['opentable_rid'] = _search_opentable_rid(restaurant_name.replace('_', ' '))
+                    if d.get('opentable_rid'):
                         r_key = f"{restaurant_name}_opentable_rid"
                         if not st.session_state.get(r_key):
-                            st.session_state[r_key] = detected_rid
-                            db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
-                    # Auto-fill Tripleseat form ID if not already set
-                    if detected_ts:
-                        ts_key = f"{restaurant_name}_tripleseat_form_id"
-                        if not st.session_state.get(ts_key):
-                            st.session_state[ts_key] = detected_ts
-                            db.update_restaurant_tripleseat(restaurant_name, detected_ts)
-                    # Auto-fill Resy URL if not already set
-                    if detected_resy:
-                        resy_key = f"{restaurant_name}_resy_url"
-                        if not st.session_state.get(resy_key):
-                            st.session_state[resy_key] = detected_resy
-                            db.update_restaurant_resy_url(restaurant_name, detected_resy)
-                    # Auto-fill mailing list URL if not already set
-                    if detected_mail:
-                        mail_key = f"{restaurant_name}_mailing_list_url"
-                        if not st.session_state.get(mail_key):
-                            st.session_state[mail_key] = detected_mail
-                            db.update_restaurant_mailing_list_url(restaurant_name, detected_mail)
+                            st.session_state[r_key] = d['opentable_rid']
+                            db.update_restaurant_opentable_rid(restaurant_name, d['opentable_rid'])
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -1993,59 +2061,64 @@ with tab_brand:
         # --- Detect handler (runs before UI so state is ready) ---
         color_key = f"{restaurant_name}_primary_color"
         if detect_all and stored_url:
-            with st.spinner("Detecting logo, brand color, booking platform, OpenTable RID & Tripleseat..."):
-                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy, detected_mail = scrape_website(stored_url)
-            if ok and detected_color:
-                st.session_state[color_key] = detected_color
-                db.update_restaurant_color(restaurant_name, detected_color)
-            if ok and detected_booking:
-                booking_key = f"{restaurant_name}_booking_platform"
-                st.session_state[booking_key] = detected_booking
-                db.update_restaurant_booking(restaurant_name, detected_booking)
-            if ok and detected_booking == "OpenTable" and not detected_rid:
-                display = restaurant_name.replace('_', ' ')
-                detected_rid = _search_opentable_rid(display)
-            if ok and detected_rid:
-                rid_key = f"{restaurant_name}_opentable_rid"
-                st.session_state[rid_key] = detected_rid
-                db.update_restaurant_opentable_rid(restaurant_name, detected_rid)
-            if ok and detected_ts:
-                ts_key = f"{restaurant_name}_tripleseat_form_id"
-                st.session_state[ts_key] = detected_ts
-                db.update_restaurant_tripleseat(restaurant_name, detected_ts)
-            if ok and detected_resy:
-                resy_key = f"{restaurant_name}_resy_url"
-                st.session_state[resy_key] = detected_resy
-                db.update_restaurant_resy_url(restaurant_name, detected_resy)
-            if ok and detected_mail:
-                mail_key = f"{restaurant_name}_mailing_list_url"
-                st.session_state[mail_key] = detected_mail
-                db.update_restaurant_mailing_list_url(restaurant_name, detected_mail)
+            with st.spinner("Detecting brand data, social links, contact info..."):
+                ok, _, _, d = scrape_website(stored_url)
+            if ok:
+                # Apply all detected metadata to session state + DB
+                _detect_fields = {
+                    'primary_color': (f"{restaurant_name}_primary_color", db.update_restaurant_color),
+                    'booking': (f"{restaurant_name}_booking_platform", db.update_restaurant_booking),
+                    'tripleseat_form_id': (f"{restaurant_name}_tripleseat_form_id", db.update_restaurant_tripleseat),
+                    'resy_url': (f"{restaurant_name}_resy_url", db.update_restaurant_resy_url),
+                    'mailing_list_url': (f"{restaurant_name}_mailing_list_url", db.update_restaurant_mailing_list_url),
+                    'facebook_url': (f"{restaurant_name}_facebook_url", db.update_restaurant_facebook_url),
+                    'instagram_url': (f"{restaurant_name}_instagram_url", db.update_restaurant_instagram_url),
+                    'phone': (f"{restaurant_name}_phone", db.update_restaurant_phone),
+                    'email_general': (f"{restaurant_name}_email_general", db.update_restaurant_email_general),
+                    'email_events': (f"{restaurant_name}_email_events", db.update_restaurant_email_events),
+                    'email_marketing': (f"{restaurant_name}_email_marketing", db.update_restaurant_email_marketing),
+                    'email_press': (f"{restaurant_name}_email_press", db.update_restaurant_email_press),
+                    'address': (f"{restaurant_name}_address", db.update_restaurant_address),
+                    'google_maps_url': (f"{restaurant_name}_google_maps_url", db.update_restaurant_google_maps_url),
+                }
+                any_changed = False
+                for dkey, (skey, db_fn) in _detect_fields.items():
+                    if d.get(dkey):
+                        st.session_state[skey] = d[dkey]
+                        db_fn(restaurant_name, d[dkey])
+                        any_changed = True
+                # OpenTable RID fallback search
+                if d.get('booking') == "OpenTable" and not d.get('opentable_rid'):
+                    d['opentable_rid'] = _search_opentable_rid(restaurant_name.replace('_', ' '))
+                if d.get('opentable_rid'):
+                    st.session_state[f"{restaurant_name}_opentable_rid"] = d['opentable_rid']
+                    db.update_restaurant_opentable_rid(restaurant_name, d['opentable_rid'])
+                    any_changed = True
             logo_saved = False
-            if ok and detected_logo:
+            if ok and d.get('logo_url'):
                 try:
-                    logo_resp = requests.get(detected_logo, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                    logo_resp = requests.get(d['logo_url'], headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
                     if logo_resp.status_code == 200 and logo_resp.content:
-                        fname = detected_logo.rsplit('/', 1)[-1].split('?')[0] or "logo.png"
+                        fname = d['logo_url'].rsplit('/', 1)[-1].split('?')[0] or "logo.png"
                         db.save_image(restaurant_name, "Logo", logo_resp.content, fname, alt_text='')
                         st.session_state[f"{restaurant_name}_Logo_persisted"] = True
                         logo_saved = True
                 except Exception:
                     pass
             favicon_saved = False
-            if ok and detected_favicon:
+            if ok and d.get('favicon_url'):
                 try:
-                    fav_resp = requests.get(detected_favicon, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+                    fav_resp = requests.get(d['favicon_url'], headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
                     if fav_resp.status_code == 200 and fav_resp.content:
-                        fname = detected_favicon.rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
+                        fname = d['favicon_url'].rsplit('/', 1)[-1].split('?')[0] or "favicon.png"
                         db.save_image(restaurant_name, "Favicon", fav_resp.content, fname, alt_text='')
                         st.session_state[f"{restaurant_name}_Favicon_persisted"] = True
                         favicon_saved = True
                 except Exception:
                     pass
-            if ok and (detected_color or detected_booking or detected_rid or detected_ts or logo_saved or favicon_saved):
+            if ok and (any_changed or logo_saved or favicon_saved):
                 st.rerun()
-            elif not ok or (not detected_color and not detected_booking):
+            elif not ok:
                 st.warning("Could not detect brand color or booking platform from the website.")
 
         # ── Brand Identity: Logo + Favicon + Color side by side ──
@@ -2216,6 +2289,115 @@ with tab_brand:
         if new_mail != current_mail:
             st.session_state[mail_key] = new_mail
             db.update_restaurant_mailing_list_url(restaurant_name, new_mail)
+
+        # ── Social Media ──
+        st.subheader("Social Media")
+        col_fb, col_ig = st.columns(2)
+        with col_fb:
+            fb_key = f"{restaurant_name}_facebook_url"
+            current_fb = st.session_state.get(fb_key, "")
+            new_fb = st.text_input(
+                "Facebook URL",
+                value=current_fb,
+                placeholder="https://www.facebook.com/restaurant-name",
+            )
+            if new_fb != current_fb:
+                st.session_state[fb_key] = new_fb
+                db.update_restaurant_facebook_url(restaurant_name, new_fb)
+        with col_ig:
+            ig_key = f"{restaurant_name}_instagram_url"
+            current_ig = st.session_state.get(ig_key, "")
+            new_ig = st.text_input(
+                "Instagram URL",
+                value=current_ig,
+                placeholder="https://www.instagram.com/restaurant-name",
+            )
+            if new_ig != current_ig:
+                st.session_state[ig_key] = new_ig
+                db.update_restaurant_instagram_url(restaurant_name, new_ig)
+
+        # ── Contact & Location ──
+        st.subheader("Contact & Location")
+        phone_key = f"{restaurant_name}_phone"
+        current_phone = st.session_state.get(phone_key, "")
+        new_phone = st.text_input(
+            "Phone",
+            value=current_phone,
+            placeholder="(215) 555-1234",
+        )
+        if new_phone != current_phone:
+            st.session_state[phone_key] = new_phone
+            db.update_restaurant_phone(restaurant_name, new_phone)
+
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            eg_key = f"{restaurant_name}_email_general"
+            current_eg = st.session_state.get(eg_key, "")
+            new_eg = st.text_input(
+                "General Email",
+                value=current_eg,
+                placeholder="restaurant.info@starr-restaurants.com",
+            )
+            if new_eg != current_eg:
+                st.session_state[eg_key] = new_eg
+                db.update_restaurant_email_general(restaurant_name, new_eg)
+        with col_e2:
+            ee_key = f"{restaurant_name}_email_events"
+            current_ee = st.session_state.get(ee_key, "")
+            new_ee = st.text_input(
+                "Events Email",
+                value=current_ee,
+                placeholder="restaurant.events@starr-restaurants.com",
+            )
+            if new_ee != current_ee:
+                st.session_state[ee_key] = new_ee
+                db.update_restaurant_email_events(restaurant_name, new_ee)
+
+        col_e3, col_e4 = st.columns(2)
+        with col_e3:
+            em_key = f"{restaurant_name}_email_marketing"
+            current_em = st.session_state.get(em_key, "")
+            new_em = st.text_input(
+                "Marketing Email",
+                value=current_em,
+                placeholder="restaurant.marketing@starr-restaurants.com",
+            )
+            if new_em != current_em:
+                st.session_state[em_key] = new_em
+                db.update_restaurant_email_marketing(restaurant_name, new_em)
+        with col_e4:
+            ep_key = f"{restaurant_name}_email_press"
+            current_ep = st.session_state.get(ep_key, "")
+            new_ep = st.text_input(
+                "Press Email",
+                value=current_ep,
+                placeholder="restaurant.press@starr-restaurants.com",
+            )
+            if new_ep != current_ep:
+                st.session_state[ep_key] = new_ep
+                db.update_restaurant_email_press(restaurant_name, new_ep)
+
+        addr_key = f"{restaurant_name}_address"
+        current_addr = st.session_state.get(addr_key, "")
+        new_addr = st.text_input(
+            "Address",
+            value=current_addr,
+            placeholder="123 Main St, Philadelphia, PA 19103",
+        )
+        if new_addr != current_addr:
+            st.session_state[addr_key] = new_addr
+            db.update_restaurant_address(restaurant_name, new_addr)
+
+        maps_key = f"{restaurant_name}_google_maps_url"
+        current_maps = st.session_state.get(maps_key, "")
+        new_maps = st.text_input(
+            "Google Maps URL",
+            value=current_maps,
+            placeholder="https://www.google.com/maps/place/...",
+        )
+        if new_maps != current_maps:
+            st.session_state[maps_key] = new_maps
+            db.update_restaurant_google_maps_url(restaurant_name, new_maps)
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
