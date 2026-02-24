@@ -462,6 +462,7 @@ def _detect_site_metadata(html_bytes):
         'phone': '', 'email_general': '', 'email_events': '',
         'email_marketing': '', 'email_press': '',
         'address': '', 'google_maps_url': '',
+        'order_online_url': '',
     }
 
     # --- Booking platform ---
@@ -492,6 +493,14 @@ def _detect_site_metadata(html_bytes):
     )
     if mail_match:
         result['mailing_list_url'] = mail_match.group(0).rstrip('/')
+
+    # --- Order online / delivery ---
+    order_match = re.search(
+        r'href=["\']?(https?://order\.online/[^\s"\'<>]+)["\']?',
+        html_str, re.IGNORECASE
+    )
+    if order_match:
+        result['order_online_url'] = order_match.group(1).rstrip('/')
 
     # --- Social media ---
     fb_match = re.search(r'href=["\']https?://(?:www\.)?facebook\.com/([^"\']+)["\']', html_str, re.IGNORECASE)
@@ -1296,7 +1305,7 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_mailing_list_url"] = r['mailing_list_url']
             for _fld in ('facebook_url', 'instagram_url', 'phone', 'email_general',
                          'email_events', 'email_marketing', 'email_press',
-                         'address', 'google_maps_url'):
+                         'address', 'google_maps_url', 'order_online_url'):
                 if r.get(_fld):
                     st.session_state[f"{rname}_{_fld}"] = r[_fld]
             if r.get('pull_data'):
@@ -1434,6 +1443,7 @@ with tab_restaurants:
                             'email_press': db.update_restaurant_email_press,
                             'address': db.update_restaurant_address,
                             'google_maps_url': db.update_restaurant_google_maps_url,
+                            'order_online_url': db.update_restaurant_order_online_url,
                         }
                         if ok:
                             for fkey, db_fn in _new_fields.items():
@@ -2014,6 +2024,7 @@ with tab_copy:
                         ('email_press', f"{restaurant_name}_email_press", db.update_restaurant_email_press),
                         ('address', f"{restaurant_name}_address", db.update_restaurant_address),
                         ('google_maps_url', f"{restaurant_name}_google_maps_url", db.update_restaurant_google_maps_url),
+                        ('order_online_url', f"{restaurant_name}_order_online_url", db.update_restaurant_order_online_url),
                     ]
                     for dkey, skey, db_fn in _autofill:
                         if d.get(dkey) and not st.session_state.get(skey):
@@ -2099,6 +2110,7 @@ with tab_brand:
                     'email_press': (f"{restaurant_name}_email_press", db.update_restaurant_email_press),
                     'address': (f"{restaurant_name}_address", db.update_restaurant_address),
                     'google_maps_url': (f"{restaurant_name}_google_maps_url", db.update_restaurant_google_maps_url),
+                    'order_online_url': (f"{restaurant_name}_order_online_url", db.update_restaurant_order_online_url),
                 }
                 any_changed = False
                 for dkey, (skey, db_fn) in _detect_fields.items():
@@ -2308,6 +2320,19 @@ with tab_brand:
         if new_mail != current_mail:
             st.session_state[mail_key] = new_mail
             db.update_restaurant_mailing_list_url(restaurant_name, new_mail)
+
+        # ── Order Online / Delivery ──
+        order_key = f"{restaurant_name}_order_online_url"
+        current_order = st.session_state.get(order_key, "")
+        new_order = st.text_input(
+            "Order Online / Delivery URL",
+            value=current_order,
+            placeholder="https://order.online/store/restaurant-name",
+            help="DoorDash order.online link found on the site.",
+        )
+        if new_order != current_order:
+            st.session_state[order_key] = new_order
+            db.update_restaurant_order_online_url(restaurant_name, new_order)
 
         # ── Social Media ──
         st.subheader("Social Media")

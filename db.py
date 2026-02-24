@@ -121,6 +121,7 @@ def init_db():
         ('email_press', "TEXT DEFAULT ''"),
         ('address', "TEXT DEFAULT ''"),
         ('google_maps_url', "TEXT DEFAULT ''"),
+        ('order_online_url', "TEXT DEFAULT ''"),
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
@@ -242,6 +243,12 @@ def update_restaurant_google_maps_url(name, google_maps_url):
     conn.commit()
 
 
+def update_restaurant_order_online_url(name, order_online_url):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET order_online_url = ? WHERE name = ?", (order_online_url, name))
+    conn.commit()
+
+
 def update_restaurant_pull_data(name, pull_data):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET pull_data = ? WHERE name = ?", (int(pull_data), name))
@@ -255,7 +262,8 @@ def get_all_restaurants():
         "SELECT name, display_name, website_url, notes, primary_color, checklist,"
         " booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url,"
         " mailing_list_url, facebook_url, instagram_url, phone, email_general,"
-        " email_events, email_marketing, email_press, address, google_maps_url"
+        " email_events, email_marketing, email_press, address, google_maps_url,"
+        " order_online_url"
         " FROM restaurants ORDER BY display_name COLLATE NOCASE"
     )
     results = _rows_to_dicts(cur)
