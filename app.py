@@ -481,7 +481,7 @@ def _detect_site_metadata(html_bytes):
 
     # --- Mailing list ---
     mail_match = re.search(
-        r'https?://(?:signup\.e2ma\.net/signup/\d+/\d+|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
+        r'https?://(?:[a-z0-9.-]+\.e2ma\.net/[^\s"\'<>]*|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
         html_str, re.IGNORECASE
     )
     if mail_match:
@@ -501,10 +501,13 @@ def _detect_site_metadata(html_bytes):
             result['instagram_url'] = f"https://www.instagram.com/{slug}"
 
     # --- Phone ---
-    tel_match = re.search(r'href=["\']tel:\+?1?-?([^"\']+)["\']', html_str, re.IGNORECASE)
+    tel_match = re.search(r'href=["\']tel:([^"\']+)["\']', html_str, re.IGNORECASE)
     if tel_match:
-        raw = tel_match.group(1).replace('-', '').replace('.', '').replace(' ', '').replace('(', '').replace(')', '')
-        if len(raw) == 10 and raw.isdigit():
+        raw = re.sub(r'[^\d]', '', tel_match.group(1))
+        # Strip leading country code 1
+        if len(raw) == 11 and raw.startswith('1'):
+            raw = raw[1:]
+        if len(raw) == 10:
             result['phone'] = f"({raw[:3]}) {raw[3:6]}-{raw[6:]}"
     if not result['phone']:
         phone_text = re.search(r'PHONE:\s*\(?(\d{3})\)?[\s.-]?(\d{3})[\s.-]?(\d{4})', html_str)
