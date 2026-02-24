@@ -1717,7 +1717,7 @@ with tab_images:
                         height=68
                     )
 
-                    col_copy_alt, col_gen_alt = st.columns(2)
+                    col_copy_alt, col_gen_alt, _col_spacer = st.columns([1, 1.5, 4], vertical_alignment="center")
                     with col_copy_alt:
                         if st.session_state[alt_key].strip():
                             copy_button(st.session_state[alt_key], f"copy_alt_{name}")
