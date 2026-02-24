@@ -1704,11 +1704,17 @@ with tab_images:
                             st.session_state[auto_key] = True
                             db.update_alt_text(restaurant_name, name, alt_text)
 
-                    col_alt_label, col_alt_btn = st.columns([5, 1], vertical_alignment="bottom")
-                    with col_alt_label:
-                        st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
-                    with col_alt_btn:
-                        regen_alt = st.button("Generate", key=f"regen_alt_{name}", disabled=not st.session_state.get('hf_api_token'))
+                    st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
+                    new_alt = st.text_area(
+                        f"Alt text for {header}",
+                        key=alt_key,
+                        label_visibility="collapsed",
+                        height=68
+                    )
+
+                    if st.session_state[alt_key].strip():
+                        copy_button(st.session_state[alt_key], f"copy_alt_{name}")
+                    regen_alt = st.button("Generate ADA Text", key=f"regen_alt_{name}", disabled=not st.session_state.get('hf_api_token'))
                     if regen_alt:
                         with st.spinner("Generating alt text..."):
                             alt_text = generate_alt_text(resized_img)
@@ -1719,15 +1725,6 @@ with tab_images:
                             st.rerun()
                         else:
                             st.warning("Alt text generation failed. Check your HF token or try again.")
-                    new_alt = st.text_area(
-                        f"Alt text for {header}",
-                        key=alt_key,
-                        label_visibility="collapsed",
-                        height=68
-                    )
-
-                    if st.session_state[alt_key].strip():
-                        copy_button(st.session_state[alt_key], f"copy_alt_{name}")
 
                 # Dividers between fields (skip right before chef expander)
                 if i < len(fields) - 1:
