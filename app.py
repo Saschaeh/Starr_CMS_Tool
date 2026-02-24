@@ -1704,6 +1704,11 @@ with tab_images:
                             st.session_state[auto_key] = True
                             db.update_alt_text(restaurant_name, name, alt_text)
 
+                    # Handle pending ADA regeneration (must set state BEFORE widget renders)
+                    pending_alt_key = f"{restaurant_name}_{name}_pending_alt"
+                    if pending_alt_key in st.session_state:
+                        st.session_state[alt_key] = st.session_state.pop(pending_alt_key)
+
                     st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
                     new_alt = st.text_area(
                         f"Alt text for {header}",
@@ -1712,14 +1717,17 @@ with tab_images:
                         height=68
                     )
 
-                    if st.session_state[alt_key].strip():
-                        copy_button(st.session_state[alt_key], f"copy_alt_{name}")
-                    regen_alt = st.button("Generate ADA Text", key=f"regen_alt_{name}", disabled=not st.session_state.get('hf_api_token'))
+                    col_copy_alt, col_gen_alt = st.columns(2)
+                    with col_copy_alt:
+                        if st.session_state[alt_key].strip():
+                            copy_button(st.session_state[alt_key], f"copy_alt_{name}")
+                    with col_gen_alt:
+                        regen_alt = st.button("Generate ADA Text", key=f"regen_alt_{name}", disabled=not st.session_state.get('hf_api_token'))
                     if regen_alt:
                         with st.spinner("Generating alt text..."):
                             alt_text = generate_alt_text(resized_img)
                         if alt_text:
-                            st.session_state[alt_key] = alt_text
+                            st.session_state[pending_alt_key] = alt_text
                             st.session_state[f"{restaurant_name}_{name}_auto_generated"] = True
                             db.update_alt_text(restaurant_name, name, alt_text)
                             st.rerun()
