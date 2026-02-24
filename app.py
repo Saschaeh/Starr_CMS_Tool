@@ -447,10 +447,10 @@ def _extract_primary_color(soup, base_url):
 def _detect_booking_platform(html_bytes):
     """Detect whether a restaurant uses Resy or OpenTable from raw HTML.
 
-    Returns (booking, opentable_rid, tripleseat_form_id, resy_url).
+    Returns (booking, opentable_rid, tripleseat_form_id, resy_url, mailing_list_url).
     When OpenTable is detected, also extracts the RID from widget/link URLs.
     When Resy is detected, extracts the full resy.com/cities/... venue URL.
-    Also detects Tripleseat lead_form_id independently.
+    Also detects Tripleseat lead_form_id and mailing list signup URLs independently.
     """
     html_str = html_bytes.decode('utf-8', errors='ignore')
     html_lower = html_str.lower()
@@ -474,7 +474,16 @@ def _detect_booking_platform(html_bytes):
         ts_match = re.search(r'lead_form_id=(\d+)', html_str)
         ts_form_id = ts_match.group(1) if ts_match else ""
 
-    return booking, rid, ts_form_id, resy_url
+    # Detect mailing list signup URL (Emma, Mailchimp, Campaign Monitor, etc.)
+    mailing_list_url = ""
+    mail_match = re.search(
+        r'https?://(?:signup\.e2ma\.net/signup/\d+/\d+|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
+        html_str, re.IGNORECASE
+    )
+    if mail_match:
+        mailing_list_url = mail_match.group(0).rstrip('/')
+
+    return booking, rid, ts_form_id, resy_url, mailing_list_url
 
 
 def _search_opentable_rid(restaurant_display_name):
@@ -500,7 +509,7 @@ def _search_opentable_rid(restaurant_display_name):
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
 
-    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url).
+    Returns (ok, text, error, primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url, mailing_list_url).
     """
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
@@ -512,13 +521,13 @@ def scrape_website(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", "", "", ""
+        return False, "", "Website took too long to respond. Please try again.", "", "", "", "", "", "", "", ""
     except requests.exceptions.ConnectionError:
-        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", "", "", ""
+        return False, "", "Could not connect to website. Please check the URL.", "", "", "", "", "", "", "", ""
     except requests.exceptions.HTTPError as e:
-        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", "", "", ""
+        return False, "", f"Website returned error {e.response.status_code}. Please verify the URL.", "", "", "", "", "", "", "", ""
     except Exception:
-        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", "", "", ""
+        return False, "", "Could not fetch website. Please check the URL and try again.", "", "", "", "", "", "", "", ""
 
     soup = BeautifulSoup(response.content, 'html.parser')
     parsed_base = urlparse(response.url)  # Use final URL after redirects
@@ -526,7 +535,7 @@ def scrape_website(url):
     primary_color = _extract_primary_color(soup, base_url)
     logo_url = _extract_logo_url(soup, base_url)
     favicon_url = _extract_favicon_url(soup, base_url)
-    booking_platform, opentable_rid, tripleseat_form_id, resy_url = _detect_booking_platform(response.content)
+    booking_platform, opentable_rid, tripleseat_form_id, resy_url, mailing_list_url = _detect_booking_platform(response.content)
     base_domain = parsed_base.netloc
 
     # Discover relevant subpage links on the same domain
@@ -572,10 +581,10 @@ def scrape_website(url):
     combined_text = "\n\n".join(all_text_parts)
 
     if len(combined_text) < 50:
-        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", "", "", ""
+        return False, "", "Website had very little text content. Try a different page or enter copy manually.", "", "", "", "", "", "", "", ""
 
     # Truncate to stay within LLM token limits
-    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url
+    return True, combined_text[:8000], "", primary_color, booking_platform, opentable_rid, tripleseat_form_id, logo_url, favicon_url, resy_url, mailing_list_url
 
 # ============================================================================
 # COPY GENERATION (Free HF Inference API)
@@ -1209,6 +1218,8 @@ if 'db_loaded' not in st.session_state:
                 st.session_state[f"{rname}_tripleseat_form_id"] = r['tripleseat_form_id']
             if r.get('resy_url'):
                 st.session_state[f"{rname}_resy_url"] = r['resy_url']
+            if r.get('mailing_list_url'):
+                st.session_state[f"{rname}_mailing_list_url"] = r['mailing_list_url']
             if r.get('pull_data'):
                 st.session_state[f"{rname}_pull_data"] = bool(r['pull_data'])
             if r.get('checklist'):
@@ -1311,7 +1322,7 @@ with tab_restaurants:
                 # Auto-detect primary color if URL provided
                 if url_val:
                     try:
-                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy = scrape_website(url_val)
+                        ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy, detected_mail = scrape_website(url_val)
                         if ok and detected_color:
                             st.session_state[f"{cleaned_name}_primary_color"] = detected_color
                             db.update_restaurant_color(cleaned_name, detected_color)
@@ -1330,6 +1341,9 @@ with tab_restaurants:
                         if ok and detected_resy:
                             st.session_state[f"{cleaned_name}_resy_url"] = detected_resy
                             db.update_restaurant_resy_url(cleaned_name, detected_resy)
+                        if ok and detected_mail:
+                            st.session_state[f"{cleaned_name}_mailing_list_url"] = detected_mail
+                            db.update_restaurant_mailing_list_url(cleaned_name, detected_mail)
                         if ok and detected_logo:
                             try:
                                 logo_resp = requests.get(detected_logo, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
@@ -1884,7 +1898,7 @@ with tab_copy:
                 st.error("HF API token not configured. Add HF_API_TOKEN to .env file.")
             else:
                 with st.spinner("Scraping website content..."):
-                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo, _detected_favicon, detected_resy = scrape_website(stored_url)
+                    ok, content, err, detected_color, detected_booking, detected_rid, detected_ts, _detected_logo, _detected_favicon, detected_resy, detected_mail = scrape_website(stored_url)
                 if not ok:
                     st.error(err)
                 else:
@@ -1920,6 +1934,12 @@ with tab_copy:
                         if not st.session_state.get(resy_key):
                             st.session_state[resy_key] = detected_resy
                             db.update_restaurant_resy_url(restaurant_name, detected_resy)
+                    # Auto-fill mailing list URL if not already set
+                    if detected_mail:
+                        mail_key = f"{restaurant_name}_mailing_list_url"
+                        if not st.session_state.get(mail_key):
+                            st.session_state[mail_key] = detected_mail
+                            db.update_restaurant_mailing_list_url(restaurant_name, detected_mail)
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -1974,7 +1994,7 @@ with tab_brand:
         color_key = f"{restaurant_name}_primary_color"
         if detect_all and stored_url:
             with st.spinner("Detecting logo, brand color, booking platform, OpenTable RID & Tripleseat..."):
-                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy = scrape_website(stored_url)
+                ok, _, _, detected_color, detected_booking, detected_rid, detected_ts, detected_logo, detected_favicon, detected_resy, detected_mail = scrape_website(stored_url)
             if ok and detected_color:
                 st.session_state[color_key] = detected_color
                 db.update_restaurant_color(restaurant_name, detected_color)
@@ -1997,6 +2017,10 @@ with tab_brand:
                 resy_key = f"{restaurant_name}_resy_url"
                 st.session_state[resy_key] = detected_resy
                 db.update_restaurant_resy_url(restaurant_name, detected_resy)
+            if ok and detected_mail:
+                mail_key = f"{restaurant_name}_mailing_list_url"
+                st.session_state[mail_key] = detected_mail
+                db.update_restaurant_mailing_list_url(restaurant_name, detected_mail)
             logo_saved = False
             if ok and detected_logo:
                 try:
@@ -2179,6 +2203,19 @@ with tab_brand:
             if new_ts != current_ts:
                 st.session_state[ts_key] = new_ts
                 db.update_restaurant_tripleseat(restaurant_name, new_ts)
+
+        # ── Mailing List ──
+        mail_key = f"{restaurant_name}_mailing_list_url"
+        current_mail = st.session_state.get(mail_key, "")
+        new_mail = st.text_input(
+            "Mailing List Signup URL",
+            value=current_mail,
+            placeholder="https://signup.e2ma.net/signup/...",
+            help="Newsletter/mailing list signup link (Emma, Mailchimp, etc.) found in site footer.",
+        )
+        if new_mail != current_mail:
+            st.session_state[mail_key] = new_mail
+            db.update_restaurant_mailing_list_url(restaurant_name, new_mail)
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")

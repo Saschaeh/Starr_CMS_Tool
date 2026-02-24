@@ -111,6 +111,7 @@ def init_db():
         ('pull_data', "INTEGER DEFAULT 0"),
         ('tripleseat_form_id', "TEXT DEFAULT ''"),
         ('resy_url', "TEXT DEFAULT ''"),
+        ('mailing_list_url', "TEXT DEFAULT ''"),
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
@@ -172,6 +173,12 @@ def update_restaurant_resy_url(name, resy_url):
     conn.commit()
 
 
+def update_restaurant_mailing_list_url(name, mailing_list_url):
+    conn = get_connection()
+    conn.execute("UPDATE restaurants SET mailing_list_url = ? WHERE name = ?", (mailing_list_url, name))
+    conn.commit()
+
+
 def update_restaurant_pull_data(name, pull_data):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET pull_data = ? WHERE name = ?", (int(pull_data), name))
@@ -179,9 +186,9 @@ def update_restaurant_pull_data(name, pull_data):
 
 
 def get_all_restaurants():
-    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url."""
+    """Return list of dicts with name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url, mailing_list_url."""
     conn = get_connection()
-    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url FROM restaurants ORDER BY display_name COLLATE NOCASE")
+    cur = conn.execute("SELECT name, display_name, website_url, notes, primary_color, checklist, booking_platform, opentable_rid, pull_data, tripleseat_form_id, resy_url, mailing_list_url FROM restaurants ORDER BY display_name COLLATE NOCASE")
     results = _rows_to_dicts(cur)
     return results
 
