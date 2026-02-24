@@ -1704,7 +1704,21 @@ with tab_images:
                             st.session_state[auto_key] = True
                             db.update_alt_text(restaurant_name, name, alt_text)
 
-                    st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
+                    col_alt_label, col_alt_btn = st.columns([5, 1], vertical_alignment="bottom")
+                    with col_alt_label:
+                        st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
+                    with col_alt_btn:
+                        regen_alt = st.button("Generate", key=f"regen_alt_{name}", disabled=not st.session_state.get('hf_api_token'))
+                    if regen_alt:
+                        with st.spinner("Generating alt text..."):
+                            alt_text = generate_alt_text(resized_img)
+                        if alt_text:
+                            st.session_state[alt_key] = alt_text
+                            st.session_state[f"{restaurant_name}_{name}_auto_generated"] = True
+                            db.update_alt_text(restaurant_name, name, alt_text)
+                            st.rerun()
+                        else:
+                            st.warning("Alt text generation failed. Check your HF token or try again.")
                     new_alt = st.text_area(
                         f"Alt text for {header}",
                         key=alt_key,
