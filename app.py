@@ -1476,7 +1476,19 @@ with tab_restaurants:
     st.subheader("Restaurants Content Progress")
 
     if st.session_state['restaurants_list']:
-        rest_list = st.session_state['restaurants_list']
+        all_rest = st.session_state['restaurants_list']
+        filter_options = [r.replace('_', ' ') for r in all_rest]
+        selected_display = st.multiselect(
+            "Filter restaurants",
+            options=filter_options,
+            default=None,
+            placeholder="Search and select restaurants...",
+        )
+        if selected_display:
+            selected_set = {s.replace(' ', '_') for s in selected_display}
+            rest_list = [r for r in all_rest if r in selected_set]
+        else:
+            rest_list = all_rest
         for rest_idx, rest_name in enumerate(rest_list):
             col1, col2, col3, col4 = st.columns([3, 1, 2, 1.5], vertical_alignment="center")
             with col1:
