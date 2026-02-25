@@ -1274,6 +1274,14 @@ footer:after {
     margin-bottom: -0.5rem !important;
 }
 
+/* Hide multiselect dropdown until user types */
+.filter-multiselect + div [data-baseweb="popover"] {
+    display: none !important;
+}
+.filter-multiselect + div.filter-has-input [data-baseweb="popover"] {
+    display: block !important;
+}
+
 /* Compact save buttons — shorter height, same width */
 .save-btn-row [data-testid="stButton"] > button {
     padding: 0.2rem 0.9rem !important;
@@ -1497,16 +1505,18 @@ with tab_restaurants:
 
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
-        st.markdown('<div class="filter-tight"></div>', unsafe_allow_html=True)
-        filter_query = st.text_input(
+        filter_options = [r.replace('_', ' ') for r in all_rest]
+        st.markdown('<div class="filter-tight filter-multiselect"></div>', unsafe_allow_html=True)
+        selected_display = st.multiselect(
             "Filter restaurants",
+            options=filter_options,
+            default=None,
             placeholder="Search restaurants...",
             label_visibility="collapsed",
-            key="restaurant_filter",
         )
-        if filter_query.strip():
-            q = filter_query.strip().lower()
-            rest_list = [r for r in all_rest if q in r.lower().replace('_', ' ')]
+        if selected_display:
+            selected_set = {s.replace(' ', '_') for s in selected_display}
+            rest_list = [r for r in all_rest if r in selected_set]
         else:
             rest_list = all_rest
         for rest_idx, rest_name in enumerate(rest_list):
@@ -1665,6 +1675,27 @@ with tab_restaurants:
                     setTimeout(() => t.remove(), 1600);
                 });
             });
+
+            // Hide multiselect dropdown until user types
+            const marker = doc.querySelector('.filter-multiselect');
+            if (marker) {
+                const wrapper = marker.nextElementSibling;
+                if (wrapper) {
+                    const input = wrapper.querySelector('input');
+                    if (input) {
+                        const toggle = () => {
+                            if (input.value.length > 0) {
+                                wrapper.classList.add('filter-has-input');
+                            } else {
+                                wrapper.classList.remove('filter-has-input');
+                            }
+                        };
+                        input.addEventListener('input', toggle);
+                        input.addEventListener('focus', toggle);
+                        toggle();
+                    }
+                }
+            }
         }, 500);
         </script>
         """, height=0)
