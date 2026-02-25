@@ -1736,10 +1736,20 @@ with tab_images:
                             bw_ok = is_black_and_white(img)
 
                     convert_key = f"{restaurant_name}_{name}_convert_bw"
-                    if is_chef and st.session_state.get(convert_key):
+                    bw_converted_key = f"{restaurant_name}_{name}_bw_converted"
+
+                    # Clear converted flag when a new file is uploaded
+                    file_fp = f"{uploaded_file.name}_{uploaded_file.size}"
+                    fp_key = f"{restaurant_name}_{name}_bw_fp"
+                    if file_fp != st.session_state.get(fp_key):
+                        st.session_state[fp_key] = file_fp
+                        st.session_state.pop(bw_converted_key, None)
+
+                    if is_chef and (st.session_state.get(convert_key) or st.session_state.get(bw_converted_key)):
                         img = img.convert('L').convert('RGB')
                         bw_ok = True
                         st.session_state.pop(convert_key, None)
+                        st.session_state[bw_converted_key] = True
 
                     if not aspect_ok:
                         st.warning("Oops Funky Ingredients: The aspect ratio deviates by more than 30% from the target. Processing may crop substantially.")
