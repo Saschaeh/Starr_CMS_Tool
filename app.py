@@ -1264,19 +1264,20 @@ footer:after {
 
 /* Pull restaurant filter search bar flush under subheader */
 .filter-tight {
-    margin-top: -0.75rem !important;
+    margin-top: -0.5rem !important;
 }
 
 /* Tighten subheader (h3) bottom margin in Restaurants tab */
 [data-testid="stTabs"] [data-testid="stHeading"] h3 {
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.1rem !important;
 }
 
-/* Compact save buttons */
+/* Compact save buttons — shorter height, same width */
 .save-btn-row [data-testid="stButton"] > button {
-    padding: 0.3rem 0.9rem !important;
+    padding: 0.2rem 0.9rem !important;
     font-size: 0.82rem !important;
     min-height: 0 !important;
+    line-height: 1.3 !important;
 }
 </style>
 """, unsafe_allow_html=True)
