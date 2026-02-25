@@ -905,9 +905,11 @@ img { border-radius: 0 !important; }
     font-weight: 500 !important;
     font-size: 0.85rem !important;
     letter-spacing: 0.3px;
-    padding: 0.3rem 1.2rem !important;
+    padding: 0.25rem 1.2rem !important;
     border-radius: 4px !important;
     transition: all 0.2s ease !important;
+    min-height: 0 !important;
+    line-height: 1.4 !important;
 }
 [data-testid="stButton"] > button:hover {
     background-color: #031E41 !important;
@@ -1264,12 +1266,12 @@ footer:after {
 
 /* Pull restaurant filter search bar flush under subheader */
 .filter-tight {
-    margin-top: -0.25rem !important;
+    margin-top: -1rem !important;
 }
 
 /* Tighten subheader (h3) bottom margin in Restaurants tab */
 [data-testid="stTabs"] [data-testid="stHeading"] h3 {
-    margin-bottom: -0.25rem !important;
+    margin-bottom: -0.5rem !important;
 }
 
 /* Compact save buttons — shorter height, same width */
