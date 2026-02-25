@@ -1263,8 +1263,12 @@ footer:after {
 }
 
 /* Pull restaurant filter search bar flush under subheader */
-.filter-gap-fix {
-    margin-bottom: -1rem;
+[data-testid="stSubheader"] {
+    padding-bottom: 0 !important;
+    margin-bottom: -1rem !important;
+}
+[data-testid="stSubheader"] + div {
+    margin-top: -1rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1479,7 +1483,6 @@ with tab_restaurants:
                 st.rerun()
 
     st.subheader("Restaurants Content Progress")
-    st.markdown('<div class="filter-gap-fix"></div>', unsafe_allow_html=True)
 
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
