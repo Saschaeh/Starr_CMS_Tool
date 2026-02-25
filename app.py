@@ -1263,12 +1263,8 @@ footer:after {
 }
 
 /* Pull restaurant filter search bar flush under subheader */
-[data-testid="stSubheader"] {
-    padding-bottom: 0 !important;
-    margin-bottom: -1rem !important;
-}
-[data-testid="stSubheader"] + div {
-    margin-top: -1rem !important;
+.filter-tight {
+    margin-top: -1.5rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1487,6 +1483,7 @@ with tab_restaurants:
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
         filter_options = [r.replace('_', ' ') for r in all_rest]
+        st.markdown('<div class="filter-tight"></div>', unsafe_allow_html=True)
         selected_display = st.multiselect(
             "Filter restaurants",
             options=filter_options,
@@ -1712,9 +1709,16 @@ with tab_images:
                 alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
                 new_filename = make_image_filename(restaurant_name, name, target_width, target_height, 'jpg', alt_for_filename)
                 is_fresh_upload = False
+                needs_save = False
 
                 if uploaded_file:
                     is_fresh_upload = True
+                    # Track file fingerprint to only save once per unique upload
+                    _upload_fp = f"{uploaded_file.name}_{uploaded_file.size}"
+                    _saved_fp_key = f"{restaurant_name}_{name}_saved_fp"
+                    if _upload_fp != st.session_state.get(_saved_fp_key):
+                        needs_save = True
+                        st.session_state[_saved_fp_key] = _upload_fp
                     img = fix_exif_orientation(Image.open(uploaded_file))
 
                     width, height = img.size
@@ -1739,6 +1743,8 @@ with tab_images:
                         st.session_state[fp_key] = file_fp
                         st.session_state.pop(bw_converted_key, None)
 
+                    if is_chef and st.session_state.get(convert_key):
+                        needs_save = True  # Save the grayscale version
                     if is_chef and (st.session_state.get(convert_key) or st.session_state.get(bw_converted_key)):
                         img = img.convert('L').convert('RGB')
                         bw_ok = True
@@ -1844,7 +1850,7 @@ with tab_images:
                     img_buffer.seek(0)
                     img_bytes = img_buffer.getvalue()
 
-                    if is_fresh_upload:
+                    if needs_save:
                         with st.spinner("Saving image..."):
                             db.save_image(
                                 restaurant_name, name, img_bytes,
