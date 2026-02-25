@@ -1497,18 +1497,16 @@ with tab_restaurants:
 
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
-        filter_options = [r.replace('_', ' ') for r in all_rest]
         st.markdown('<div class="filter-tight"></div>', unsafe_allow_html=True)
-        selected_display = st.multiselect(
+        filter_query = st.text_input(
             "Filter restaurants",
-            options=filter_options,
-            default=None,
-            placeholder="Search and select restaurants...",
+            placeholder="Search restaurants...",
             label_visibility="collapsed",
+            key="restaurant_filter",
         )
-        if selected_display:
-            selected_set = {s.replace(' ', '_') for s in selected_display}
-            rest_list = [r for r in all_rest if r in selected_set]
+        if filter_query.strip():
+            q = filter_query.strip().lower()
+            rest_list = [r for r in all_rest if q in r.lower().replace('_', ' ')]
         else:
             rest_list = all_rest
         for rest_idx, rest_name in enumerate(rest_list):
