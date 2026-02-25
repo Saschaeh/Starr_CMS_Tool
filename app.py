@@ -1474,6 +1474,7 @@ with tab_restaurants:
                 st.rerun()
 
     st.subheader("Restaurants Content Progress")
+    st.markdown('<div style="margin-top:-0.5rem"></div>', unsafe_allow_html=True)
 
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
