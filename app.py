@@ -1474,7 +1474,7 @@ with tab_restaurants:
                 st.rerun()
 
     st.subheader("Restaurants Content Progress")
-    st.markdown('<div style="margin-top:-0.5rem"></div>', unsafe_allow_html=True)
+    st.markdown('<style>[data-testid="stSubheader"]{margin-bottom:-0.75rem;}</style>', unsafe_allow_html=True)
 
     if st.session_state['restaurants_list']:
         all_rest = st.session_state['restaurants_list']
@@ -1860,6 +1860,7 @@ with tab_images:
                                 alt_text=st.session_state.get(f"{restaurant_name}_{name}_alt", ''),
                                 overlay_opacity=st.session_state.get(f"{restaurant_name}_{name}_opacity", 40)
                             )
+                        _load_persisted_image.clear()
                         st.session_state[persisted_flag_key] = True
 
                     # Download button for individual image
