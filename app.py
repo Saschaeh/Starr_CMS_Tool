@@ -1667,8 +1667,10 @@ with tab_images:
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
         st.header(f"Upload Images for {restaurant_name.replace('_', ' ')}")
+        save_images_top = st.button("Save All Images", type="primary", key="save_images_top")
 
         uploaded_files = {}
+        _pending_saves = {}
         _CHEF_FIELDS_SET = {'Chef_1', 'Chef_2', 'Chef_3'}
         _chef_expander = None
 
@@ -1710,9 +1712,11 @@ with tab_images:
                 new_filename = make_image_filename(restaurant_name, name, target_width, target_height, 'jpg', alt_for_filename)
                 is_fresh_upload = False
                 needs_save = False
+                _orig_filename = ''
 
                 if uploaded_file:
                     is_fresh_upload = True
+                    _orig_filename = uploaded_file.name
                     # Track file fingerprint to only save once per unique upload
                     _upload_fp = f"{uploaded_file.name}_{uploaded_file.size}"
                     _saved_fp_key = f"{restaurant_name}_{name}_saved_fp"
@@ -1777,6 +1781,7 @@ with tab_images:
                     if blob_data:
                         resized_img = Image.open(io.BytesIO(blob_data))
                         orig_fn = record.get('original_filename', '') if record else ''
+                        _orig_filename = orig_fn
                         ext = orig_fn.rsplit('.', 1)[-1].lower() if '.' in orig_fn else 'jpg'
                         format_map = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG'}
                         img_format = format_map.get(ext, 'JPEG')
@@ -1836,8 +1841,6 @@ with tab_images:
                         else:
                             resized_img = resized_img_no_overlay
 
-                        # Persist overlay setting
-                        db.update_overlay(restaurant_name, name, final_opacity)
                     else:
                         st.image(resized_img, width=300)
 
@@ -1850,16 +1853,12 @@ with tab_images:
                     img_buffer.seek(0)
                     img_bytes = img_buffer.getvalue()
 
-                    if needs_save:
-                        with st.spinner("Saving image..."):
-                            db.save_image(
-                                restaurant_name, name, img_bytes,
-                                uploaded_file.name,
-                                alt_text=st.session_state.get(f"{restaurant_name}_{name}_alt", ''),
-                                overlay_opacity=st.session_state.get(f"{restaurant_name}_{name}_opacity", 40)
-                            )
-                        _load_persisted_image.clear()
-                        st.session_state[persisted_flag_key] = True
+                    # Collect for batch save
+                    _pending_saves[name] = {
+                        'img_bytes': img_bytes,
+                        'filename': _orig_filename,
+                        'is_fresh': is_fresh_upload,
+                    }
 
                     # Download button for individual image
                     st.download_button(
@@ -1890,7 +1889,6 @@ with tab_images:
                         if alt_text:
                             st.session_state[alt_key] = alt_text
                             st.session_state[auto_key] = True
-                            db.update_alt_text(restaurant_name, name, alt_text)
 
                     # Handle pending ADA regeneration (must set state BEFORE widget renders)
                     pending_alt_key = f"{restaurant_name}_{name}_pending_alt"
@@ -1917,7 +1915,6 @@ with tab_images:
                         if alt_text:
                             st.session_state[pending_alt_key] = alt_text
                             st.session_state[f"{restaurant_name}_{name}_auto_generated"] = True
-                            db.update_alt_text(restaurant_name, name, alt_text)
                             st.rerun()
                         else:
                             st.warning("Alt text generation failed. Check your HF token or try again.")
@@ -1929,19 +1926,32 @@ with tab_images:
                     if not (not curr_is_chef and next_is_chef):
                         st.markdown("---")
 
-        # Save all alt text changes with one button
+        # Save all images, alt text, and overlay settings
         st.markdown("---")
-        if st.button("Save Alt Text", key="save_all_alt"):
+        save_images_bottom = st.button("Save", key="save_images_bottom")
+        if save_images_top or save_images_bottom:
             saved_count = 0
-            for field_name, _, _ in fields:
-                alt_key = f"{restaurant_name}_{field_name}_alt"
-                if alt_key in st.session_state and st.session_state[alt_key].strip():
-                    db.update_alt_text(restaurant_name, field_name, st.session_state[alt_key])
-                    saved_count += 1
+            for field_name, data in _pending_saves.items():
+                alt_text = st.session_state.get(f"{restaurant_name}_{field_name}_alt", '')
+                overlay = st.session_state.get(f"{restaurant_name}_{field_name}_opacity", 40)
+                if data['is_fresh']:
+                    db.save_image(
+                        restaurant_name, field_name, data['img_bytes'],
+                        data['filename'],
+                        alt_text=alt_text,
+                        overlay_opacity=overlay,
+                    )
+                    st.session_state[f"{restaurant_name}_{field_name}_persisted"] = True
+                else:
+                    db.update_alt_text(restaurant_name, field_name, alt_text)
+                    if field_name in ('Hero_Image_Desktop', 'Hero_Image_Mobile'):
+                        db.update_overlay(restaurant_name, field_name, overlay)
+                saved_count += 1
+            _load_persisted_image.clear()
             if saved_count:
-                st.success(f"Saved alt text for {saved_count} images.")
+                st.toast(f"Saved {saved_count} image(s) with alt text and settings.")
             else:
-                st.info("No alt text to save.")
+                st.info("No images to save. Upload images first.")
 
         # Batch download
         if any(uploaded_files.values()):
@@ -2011,7 +2021,6 @@ with tab_copy:
             if new_url != stored_url:
                 st.session_state[url_key] = new_url
                 stored_url = new_url
-                db.update_restaurant_url(restaurant_name, new_url)
         with col_gen:
             generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
         with col_save:
@@ -2021,6 +2030,7 @@ with tab_copy:
                     skey = f"{restaurant_name}_copy_{sid}"
                     copy_dict[sid] = st.session_state.get(skey, "")
                 db.save_all_copy(restaurant_name, copy_dict)
+                db.update_restaurant_url(restaurant_name, st.session_state.get(url_key, ""))
                 st.success("All copy and metadata saved.")
 
         if not stored_url:
@@ -2140,9 +2150,11 @@ with tab_brand:
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
-        col_header_left, col_detect_right = st.columns([6, 1], vertical_alignment="bottom")
+        col_header_left, col_save_brand, col_detect_right = st.columns([5, 1, 1], vertical_alignment="bottom")
         with col_header_left:
             st.header(f"Brand & Reservation for {restaurant_name.replace('_', ' ')}")
+        with col_save_brand:
+            save_brand_top = st.button("Save", type="primary", key="save_brand_top")
         with col_detect_right:
             detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
 
@@ -2152,36 +2164,34 @@ with tab_brand:
             with st.spinner("Detecting brand data, social links, contact info..."):
                 ok, _, _, d = scrape_website(stored_url)
             if ok:
-                # Apply all detected metadata to session state + DB
-                _detect_fields = {
-                    'primary_color': (f"{restaurant_name}_primary_color", db.update_restaurant_color),
-                    'booking': (f"{restaurant_name}_booking_platform", db.update_restaurant_booking),
-                    'tripleseat_form_id': (f"{restaurant_name}_tripleseat_form_id", db.update_restaurant_tripleseat),
-                    'resy_url': (f"{restaurant_name}_resy_url", db.update_restaurant_resy_url),
-                    'mailing_list_url': (f"{restaurant_name}_mailing_list_url", db.update_restaurant_mailing_list_url),
-                    'facebook_url': (f"{restaurant_name}_facebook_url", db.update_restaurant_facebook_url),
-                    'instagram_url': (f"{restaurant_name}_instagram_url", db.update_restaurant_instagram_url),
-                    'phone': (f"{restaurant_name}_phone", db.update_restaurant_phone),
-                    'email_general': (f"{restaurant_name}_email_general", db.update_restaurant_email_general),
-                    'email_events': (f"{restaurant_name}_email_events", db.update_restaurant_email_events),
-                    'email_marketing': (f"{restaurant_name}_email_marketing", db.update_restaurant_email_marketing),
-                    'email_press': (f"{restaurant_name}_email_press", db.update_restaurant_email_press),
-                    'address': (f"{restaurant_name}_address", db.update_restaurant_address),
-                    'google_maps_url': (f"{restaurant_name}_google_maps_url", db.update_restaurant_google_maps_url),
-                    'order_online_url': (f"{restaurant_name}_order_online_url", db.update_restaurant_order_online_url),
-                }
+                # Apply all detected metadata to session state (DB write deferred to Save)
+                _detect_fields = [
+                    ('primary_color', f"{restaurant_name}_primary_color"),
+                    ('booking', f"{restaurant_name}_booking_platform"),
+                    ('tripleseat_form_id', f"{restaurant_name}_tripleseat_form_id"),
+                    ('resy_url', f"{restaurant_name}_resy_url"),
+                    ('mailing_list_url', f"{restaurant_name}_mailing_list_url"),
+                    ('facebook_url', f"{restaurant_name}_facebook_url"),
+                    ('instagram_url', f"{restaurant_name}_instagram_url"),
+                    ('phone', f"{restaurant_name}_phone"),
+                    ('email_general', f"{restaurant_name}_email_general"),
+                    ('email_events', f"{restaurant_name}_email_events"),
+                    ('email_marketing', f"{restaurant_name}_email_marketing"),
+                    ('email_press', f"{restaurant_name}_email_press"),
+                    ('address', f"{restaurant_name}_address"),
+                    ('google_maps_url', f"{restaurant_name}_google_maps_url"),
+                    ('order_online_url', f"{restaurant_name}_order_online_url"),
+                ]
                 any_changed = False
-                for dkey, (skey, db_fn) in _detect_fields.items():
+                for dkey, skey in _detect_fields:
                     if d.get(dkey):
                         st.session_state[skey] = d[dkey]
-                        db_fn(restaurant_name, d[dkey])
                         any_changed = True
                 # OpenTable RID fallback search
                 if d.get('booking') == "OpenTable" and not d.get('opentable_rid'):
                     d['opentable_rid'] = _search_opentable_rid(restaurant_name.replace('_', ' '))
                 if d.get('opentable_rid'):
                     st.session_state[f"{restaurant_name}_opentable_rid"] = d['opentable_rid']
-                    db.update_restaurant_opentable_rid(restaurant_name, d['opentable_rid'])
                     any_changed = True
             logo_saved = False
             if ok and d.get('logo_url'):
@@ -2316,10 +2326,8 @@ with tab_brand:
                 )
             if typed and re.match(r'^#[0-9a-fA-F]{6}$', typed) and typed != canonical:
                 st.session_state[color_key] = typed
-                db.update_restaurant_color(restaurant_name, typed)
             elif picked != (canonical or "#000000"):
                 st.session_state[color_key] = picked
-                db.update_restaurant_color(restaurant_name, picked)
 
         # ── Reservations & Bookings ──
         st.subheader("Reservations & Bookings")
@@ -2340,7 +2348,6 @@ with tab_brand:
                 )
                 if new_rid != current_rid:
                     st.session_state[rid_key] = new_rid
-                    db.update_restaurant_opentable_rid(restaurant_name, new_rid)
             elif booking_val == "Resy":
                 resy_key = f"{restaurant_name}_resy_url"
                 current_resy = st.session_state.get(resy_key, "")
@@ -2352,7 +2359,6 @@ with tab_brand:
                 )
                 if new_resy != current_resy:
                     st.session_state[resy_key] = new_resy
-                    db.update_restaurant_resy_url(restaurant_name, new_resy)
         with col_ts:
             ts_key = f"{restaurant_name}_tripleseat_form_id"
             current_ts = st.session_state.get(ts_key, "")
@@ -2364,7 +2370,6 @@ with tab_brand:
             )
             if new_ts != current_ts:
                 st.session_state[ts_key] = new_ts
-                db.update_restaurant_tripleseat(restaurant_name, new_ts)
 
         # ── Mailing List ──
         mail_key = f"{restaurant_name}_mailing_list_url"
@@ -2377,7 +2382,6 @@ with tab_brand:
         )
         if new_mail != current_mail:
             st.session_state[mail_key] = new_mail
-            db.update_restaurant_mailing_list_url(restaurant_name, new_mail)
 
         # ── Order Online / Delivery ──
         order_key = f"{restaurant_name}_order_online_url"
@@ -2390,7 +2394,6 @@ with tab_brand:
         )
         if new_order != current_order:
             st.session_state[order_key] = new_order
-            db.update_restaurant_order_online_url(restaurant_name, new_order)
 
         # ── Social Media ──
         st.subheader("Social Media")
@@ -2405,7 +2408,6 @@ with tab_brand:
             )
             if new_fb != current_fb:
                 st.session_state[fb_key] = new_fb
-                db.update_restaurant_facebook_url(restaurant_name, new_fb)
         with col_ig:
             ig_key = f"{restaurant_name}_instagram_url"
             current_ig = st.session_state.get(ig_key, "")
@@ -2416,7 +2418,6 @@ with tab_brand:
             )
             if new_ig != current_ig:
                 st.session_state[ig_key] = new_ig
-                db.update_restaurant_instagram_url(restaurant_name, new_ig)
 
         # ── Contact & Location ──
         st.subheader("Contact & Location")
@@ -2429,7 +2430,6 @@ with tab_brand:
         )
         if new_phone != current_phone:
             st.session_state[phone_key] = new_phone
-            db.update_restaurant_phone(restaurant_name, new_phone)
 
         col_e1, col_e2 = st.columns(2)
         with col_e1:
@@ -2442,7 +2442,6 @@ with tab_brand:
             )
             if new_eg != current_eg:
                 st.session_state[eg_key] = new_eg
-                db.update_restaurant_email_general(restaurant_name, new_eg)
         with col_e2:
             ee_key = f"{restaurant_name}_email_events"
             current_ee = st.session_state.get(ee_key, "")
@@ -2453,7 +2452,6 @@ with tab_brand:
             )
             if new_ee != current_ee:
                 st.session_state[ee_key] = new_ee
-                db.update_restaurant_email_events(restaurant_name, new_ee)
 
         col_e3, col_e4 = st.columns(2)
         with col_e3:
@@ -2466,7 +2464,6 @@ with tab_brand:
             )
             if new_em != current_em:
                 st.session_state[em_key] = new_em
-                db.update_restaurant_email_marketing(restaurant_name, new_em)
         with col_e4:
             ep_key = f"{restaurant_name}_email_press"
             current_ep = st.session_state.get(ep_key, "")
@@ -2477,7 +2474,6 @@ with tab_brand:
             )
             if new_ep != current_ep:
                 st.session_state[ep_key] = new_ep
-                db.update_restaurant_email_press(restaurant_name, new_ep)
 
         addr_key = f"{restaurant_name}_address"
         current_addr = st.session_state.get(addr_key, "")
@@ -2488,7 +2484,6 @@ with tab_brand:
         )
         if new_addr != current_addr:
             st.session_state[addr_key] = new_addr
-            db.update_restaurant_address(restaurant_name, new_addr)
 
         maps_key = f"{restaurant_name}_google_maps_url"
         current_maps = st.session_state.get(maps_key, "")
@@ -2499,7 +2494,31 @@ with tab_brand:
         )
         if new_maps != current_maps:
             st.session_state[maps_key] = new_maps
-            db.update_restaurant_google_maps_url(restaurant_name, new_maps)
+
+        # Save all brand & reservation fields
+        st.markdown("---")
+        save_brand_bottom = st.button("Save", key="save_brand_bottom")
+        if save_brand_top or save_brand_bottom:
+            db.update_restaurant_color(restaurant_name, st.session_state.get(f"{restaurant_name}_primary_color", ""))
+            booking = st.session_state.get(f"{restaurant_name}_booking_platform", "")
+            db.update_restaurant_booking(restaurant_name, booking)
+            if booking == "OpenTable":
+                db.update_restaurant_opentable_rid(restaurant_name, st.session_state.get(f"{restaurant_name}_opentable_rid", ""))
+            elif booking == "Resy":
+                db.update_restaurant_resy_url(restaurant_name, st.session_state.get(f"{restaurant_name}_resy_url", ""))
+            db.update_restaurant_tripleseat(restaurant_name, st.session_state.get(f"{restaurant_name}_tripleseat_form_id", ""))
+            db.update_restaurant_mailing_list_url(restaurant_name, st.session_state.get(f"{restaurant_name}_mailing_list_url", ""))
+            db.update_restaurant_order_online_url(restaurant_name, st.session_state.get(f"{restaurant_name}_order_online_url", ""))
+            db.update_restaurant_facebook_url(restaurant_name, st.session_state.get(f"{restaurant_name}_facebook_url", ""))
+            db.update_restaurant_instagram_url(restaurant_name, st.session_state.get(f"{restaurant_name}_instagram_url", ""))
+            db.update_restaurant_phone(restaurant_name, st.session_state.get(f"{restaurant_name}_phone", ""))
+            db.update_restaurant_email_general(restaurant_name, st.session_state.get(f"{restaurant_name}_email_general", ""))
+            db.update_restaurant_email_events(restaurant_name, st.session_state.get(f"{restaurant_name}_email_events", ""))
+            db.update_restaurant_email_marketing(restaurant_name, st.session_state.get(f"{restaurant_name}_email_marketing", ""))
+            db.update_restaurant_email_press(restaurant_name, st.session_state.get(f"{restaurant_name}_email_press", ""))
+            db.update_restaurant_address(restaurant_name, st.session_state.get(f"{restaurant_name}_address", ""))
+            db.update_restaurant_google_maps_url(restaurant_name, st.session_state.get(f"{restaurant_name}_google_maps_url", ""))
+            st.toast("Brand & reservation data saved.")
 
         if not stored_url:
             st.caption("Add a website URL in the Restaurants tab to enable auto-detection.")
