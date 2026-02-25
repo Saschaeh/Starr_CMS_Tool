@@ -2442,9 +2442,9 @@ with tab_brand:
         st.subheader("Reservations & Bookings")
         booking_val = st.session_state.get(f"{restaurant_name}_booking_platform", "")
         if booking_val:
-            st.caption(f"Booking platform: **{booking_val}**")
+            st.caption(f"Detected platform: **{booking_val}**")
 
-        col_ot, col_resy = st.columns(2)
+        col_ot, col_resy, col_ts = st.columns(3)
         with col_ot:
             rid_key = f"{restaurant_name}_opentable_rid"
             current_rid = st.session_state.get(rid_key, "")
@@ -2462,18 +2462,16 @@ with tab_brand:
             new_resy = st.text_input(
                 "Resy URL",
                 value=current_resy,
-                placeholder="https://resy.com/cities/new-york-ny/venues/restaurant-name",
+                placeholder="https://resy.com/cities/...",
                 help="Full Resy venue URL used for Book A Table links.",
             )
             if new_resy != current_resy:
                 st.session_state[resy_key] = new_resy
-
-        col_ts, _ = st.columns(2)
         with col_ts:
             ts_key = f"{restaurant_name}_tripleseat_form_id"
             current_ts = st.session_state.get(ts_key, "")
             new_ts = st.text_input(
-                "Tripleseat Lead Form ID",
+                "Tripleseat Form ID",
                 value=current_ts,
                 placeholder="e.g. 6616",
                 help="Numeric lead_form_id from Tripleseat embed script.",
@@ -2481,38 +2479,38 @@ with tab_brand:
             if new_ts != current_ts:
                 st.session_state[ts_key] = new_ts
 
-        # ── Mailing List ──
-        mail_key = f"{restaurant_name}_mailing_list_url"
-        current_mail = st.session_state.get(mail_key, "")
-        new_mail = st.text_input(
-            "Mailing List Signup URL",
-            value=current_mail,
-            placeholder="https://signup.e2ma.net/signup/...",
-            help="Newsletter/mailing list signup link (Emma, Mailchimp, etc.) found in site footer.",
-        )
-        if new_mail != current_mail:
-            st.session_state[mail_key] = new_mail
+        # ── Links & Integrations ──
+        st.subheader("Links")
+        col_mail, col_order = st.columns(2)
+        with col_mail:
+            mail_key = f"{restaurant_name}_mailing_list_url"
+            current_mail = st.session_state.get(mail_key, "")
+            new_mail = st.text_input(
+                "Mailing List URL",
+                value=current_mail,
+                placeholder="https://signup.e2ma.net/signup/...",
+                help="Newsletter signup link (Emma, Mailchimp, etc.).",
+            )
+            if new_mail != current_mail:
+                st.session_state[mail_key] = new_mail
+        with col_order:
+            order_key = f"{restaurant_name}_order_online_url"
+            current_order = st.session_state.get(order_key, "")
+            new_order = st.text_input(
+                "Order Online URL",
+                value=current_order,
+                placeholder="https://order.online/store/...",
+                help="DoorDash order.online link found on the site.",
+            )
+            if new_order != current_order:
+                st.session_state[order_key] = new_order
 
-        # ── Order Online / Delivery ──
-        order_key = f"{restaurant_name}_order_online_url"
-        current_order = st.session_state.get(order_key, "")
-        new_order = st.text_input(
-            "Order Online / Delivery URL",
-            value=current_order,
-            placeholder="https://order.online/store/restaurant-name",
-            help="DoorDash order.online link found on the site.",
-        )
-        if new_order != current_order:
-            st.session_state[order_key] = new_order
-
-        # ── Social Media ──
-        st.subheader("Social Media")
         col_fb, col_ig = st.columns(2)
         with col_fb:
             fb_key = f"{restaurant_name}_facebook_url"
             current_fb = st.session_state.get(fb_key, "")
             new_fb = st.text_input(
-                "Facebook URL",
+                "Facebook",
                 value=current_fb,
                 placeholder="https://www.facebook.com/restaurant-name",
             )
@@ -2522,7 +2520,7 @@ with tab_brand:
             ig_key = f"{restaurant_name}_instagram_url"
             current_ig = st.session_state.get(ig_key, "")
             new_ig = st.text_input(
-                "Instagram URL",
+                "Instagram",
                 value=current_ig,
                 placeholder="https://www.instagram.com/restaurant-name",
             )
@@ -2531,15 +2529,37 @@ with tab_brand:
 
         # ── Contact & Location ──
         st.subheader("Contact & Location")
-        phone_key = f"{restaurant_name}_phone"
-        current_phone = st.session_state.get(phone_key, "")
-        new_phone = st.text_input(
-            "Phone",
-            value=current_phone,
-            placeholder="(215) 555-1234",
+        col_phone, col_addr = st.columns(2)
+        with col_phone:
+            phone_key = f"{restaurant_name}_phone"
+            current_phone = st.session_state.get(phone_key, "")
+            new_phone = st.text_input(
+                "Phone",
+                value=current_phone,
+                placeholder="(215) 555-1234",
+            )
+            if new_phone != current_phone:
+                st.session_state[phone_key] = new_phone
+        with col_addr:
+            addr_key = f"{restaurant_name}_address"
+            current_addr = st.session_state.get(addr_key, "")
+            new_addr = st.text_input(
+                "Address",
+                value=current_addr,
+                placeholder="123 Main St, Philadelphia, PA 19103",
+            )
+            if new_addr != current_addr:
+                st.session_state[addr_key] = new_addr
+
+        maps_key = f"{restaurant_name}_google_maps_url"
+        current_maps = st.session_state.get(maps_key, "")
+        new_maps = st.text_input(
+            "Google Maps URL",
+            value=current_maps,
+            placeholder="https://www.google.com/maps/place/...",
         )
-        if new_phone != current_phone:
-            st.session_state[phone_key] = new_phone
+        if new_maps != current_maps:
+            st.session_state[maps_key] = new_maps
 
         col_e1, col_e2 = st.columns(2)
         with col_e1:
@@ -2584,26 +2604,6 @@ with tab_brand:
             )
             if new_ep != current_ep:
                 st.session_state[ep_key] = new_ep
-
-        addr_key = f"{restaurant_name}_address"
-        current_addr = st.session_state.get(addr_key, "")
-        new_addr = st.text_input(
-            "Address",
-            value=current_addr,
-            placeholder="123 Main St, Philadelphia, PA 19103",
-        )
-        if new_addr != current_addr:
-            st.session_state[addr_key] = new_addr
-
-        maps_key = f"{restaurant_name}_google_maps_url"
-        current_maps = st.session_state.get(maps_key, "")
-        new_maps = st.text_input(
-            "Google Maps URL",
-            value=current_maps,
-            placeholder="https://www.google.com/maps/place/...",
-        )
-        if new_maps != current_maps:
-            st.session_state[maps_key] = new_maps
 
         # Save all brand & reservation fields
         st.markdown("---")
