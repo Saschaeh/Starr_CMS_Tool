@@ -1707,10 +1707,22 @@ with tab_images:
                         with st.spinner('Checking if image is grayscale...'):
                             bw_ok = is_black_and_white(img)
 
+                    convert_key = f"{restaurant_name}_{name}_convert_bw"
+                    if is_chef and st.session_state.get(convert_key):
+                        img = img.convert('L').convert('RGB')
+                        bw_ok = True
+                        st.session_state.pop(convert_key, None)
+
                     if not aspect_ok:
                         st.warning("Oops Funky Ingredients: The aspect ratio deviates by more than 30% from the target. Processing may crop substantially.")
                     if is_chef and not bw_ok:
-                        st.warning("Brand guidelines suggest Black&White images of the chefs to keep with the editorial look.")
+                        warn_col, btn_col = st.columns([3, 1])
+                        with warn_col:
+                            st.warning("Brand guidelines suggest Black&White images of the chefs to keep with the editorial look.")
+                        with btn_col:
+                            if st.button("Convert to B&W", key=f"convert_bw_{name}"):
+                                st.session_state[f"{restaurant_name}_{name}_convert_bw"] = True
+                                st.rerun()
                     if aspect_ok and (not is_chef or bw_ok):
                         st.success("Perfect, looks delicious!")
 
