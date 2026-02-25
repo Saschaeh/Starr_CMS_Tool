@@ -1264,7 +1264,19 @@ footer:after {
 
 /* Pull restaurant filter search bar flush under subheader */
 .filter-tight {
-    margin-top: -1.5rem !important;
+    margin-top: -0.75rem !important;
+}
+
+/* Tighten subheader (h3) bottom margin in Restaurants tab */
+[data-testid="stTabs"] [data-testid="stHeading"] h3 {
+    margin-bottom: 0.25rem !important;
+}
+
+/* Compact save buttons */
+.save-btn-row [data-testid="stButton"] > button {
+    padding: 0.3rem 0.9rem !important;
+    font-size: 0.82rem !important;
+    min-height: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1666,8 +1678,13 @@ with tab_images:
     if not restaurant_name:
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Upload Images for {restaurant_name.replace('_', ' ')}")
-        save_images_top = st.button("Save All Images", type="primary", key="save_images_top")
+        col_img_header, col_img_save = st.columns([8, 1], vertical_alignment="bottom")
+        with col_img_header:
+            st.header(f"Upload Images for {restaurant_name.replace('_', ' ')}")
+        with col_img_save:
+            st.markdown('<div class="save-btn-row">', unsafe_allow_html=True)
+            save_images_top = st.button("Save", type="primary", key="save_images_top")
+            st.markdown('</div>', unsafe_allow_html=True)
 
         uploaded_files = {}
         _pending_saves = {}
@@ -2005,12 +2022,19 @@ with tab_copy:
         st.header("Copy & Metadata")
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
-        st.header(f"Copy & Metadata for {restaurant_name.replace('_', ' ')}")
+        col_copy_header, col_copy_save = st.columns([8, 1], vertical_alignment="bottom")
+        with col_copy_header:
+            st.header(f"Copy & Metadata for {restaurant_name.replace('_', ' ')}")
+        with col_copy_save:
+            st.markdown('<div class="save-btn-row">', unsafe_allow_html=True)
+            save_copy_top = st.button("Save", type="primary", key="save_copy_top")
+            st.markdown('</div>', unsafe_allow_html=True)
+
         url_key = f"{restaurant_name}_website_url"
         stored_url = st.session_state.get(url_key, "")
 
-        # --- URL + Generate + Save ---
-        col_url_edit, col_gen, col_save = st.columns([5, 1.2, 1.2], vertical_alignment="bottom")
+        # --- URL + Generate ---
+        col_url_edit, col_gen = st.columns([5, 1.2], vertical_alignment="bottom")
         with col_url_edit:
             new_url = st.text_input(
                 "Website URL",
@@ -2023,15 +2047,6 @@ with tab_copy:
                 stored_url = new_url
         with col_gen:
             generate_all = st.button("Generate Copy", type="primary", disabled=not stored_url)
-        with col_save:
-            if st.button("Save Changes", type="primary", key="save_copy"):
-                copy_dict = {}
-                for sid, _, _, _, _ in COPY_SECTIONS:
-                    skey = f"{restaurant_name}_copy_{sid}"
-                    copy_dict[sid] = st.session_state.get(skey, "")
-                db.save_all_copy(restaurant_name, copy_dict)
-                db.update_restaurant_url(restaurant_name, st.session_state.get(url_key, ""))
-                st.success("All copy and metadata saved.")
 
         if not stored_url:
             st.info("Enter a website URL above to enable copy generation.")
@@ -2140,6 +2155,18 @@ with tab_copy:
                 height = 68 if section_id == 'meta_title' else 80
                 render_copy_section(restaurant_name, section_id, section_label, word_min, word_max, description, height=height)
 
+        # Save handler (bottom)
+        st.markdown("---")
+        save_copy_bottom = st.button("Save", key="save_copy_bottom")
+        if save_copy_top or save_copy_bottom:
+            copy_dict = {}
+            for sid, _, _, _, _ in COPY_SECTIONS:
+                skey = f"{restaurant_name}_copy_{sid}"
+                copy_dict[sid] = st.session_state.get(skey, "")
+            db.save_all_copy(restaurant_name, copy_dict)
+            db.update_restaurant_url(restaurant_name, st.session_state.get(url_key, ""))
+            st.toast("All copy and metadata saved.")
+
 # ==============================================================================
 # TAB 4: BRAND
 # ==============================================================================
@@ -2150,13 +2177,17 @@ with tab_brand:
         st.warning("Please select or create a restaurant in the 'Restaurants' tab first.")
     else:
         stored_url = st.session_state.get(f"{restaurant_name}_website_url", "")
-        col_header_left, col_save_brand, col_detect_right = st.columns([5, 1, 1], vertical_alignment="bottom")
+        col_header_left, col_save_brand, col_detect_right = st.columns([8, 1, 1], vertical_alignment="bottom")
         with col_header_left:
             st.header(f"Brand & Reservation for {restaurant_name.replace('_', ' ')}")
         with col_save_brand:
+            st.markdown('<div class="save-btn-row">', unsafe_allow_html=True)
             save_brand_top = st.button("Save", type="primary", key="save_brand_top")
+            st.markdown('</div>', unsafe_allow_html=True)
         with col_detect_right:
+            st.markdown('<div class="save-btn-row">', unsafe_allow_html=True)
             detect_all = st.button("Detect", key=f"{restaurant_name}_detect_all", disabled=not stored_url)
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Detect handler (runs before UI so state is ready) ---
         color_key = f"{restaurant_name}_primary_color"
