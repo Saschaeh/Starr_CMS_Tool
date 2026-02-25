@@ -1680,7 +1680,23 @@ with tab_images:
 
                 # Determine image source: fresh upload or persisted in database
                 persisted_flag_key = f"{restaurant_name}_{name}_persisted"
+                had_upload_key = f"{restaurant_name}_{name}_had_upload"
                 has_persisted = bool(st.session_state.get(persisted_flag_key, False))
+
+                # Detect uploader cleared (user clicked X) → delete image from DB
+                if not uploaded_file and st.session_state.get(had_upload_key):
+                    st.session_state.pop(had_upload_key, None)
+                    if has_persisted:
+                        db.delete_image(restaurant_name, name)
+                        st.session_state[persisted_flag_key] = False
+                        has_persisted = False
+                        # Clear related session state
+                        st.session_state.pop(f"{restaurant_name}_{name}_alt", None)
+                        st.session_state.pop(f"{restaurant_name}_{name}_auto_generated", None)
+                        st.session_state.pop(f"{restaurant_name}_{name}_alt_source", None)
+
+                if uploaded_file:
+                    st.session_state[had_upload_key] = True
 
                 resized_img = None
                 img_format = 'JPEG'
