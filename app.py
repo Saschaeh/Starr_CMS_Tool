@@ -1483,6 +1483,7 @@ with tab_restaurants:
             options=filter_options,
             default=None,
             placeholder="Search and select restaurants...",
+            label_visibility="collapsed",
         )
         if selected_display:
             selected_set = {s.replace(' ', '_') for s in selected_display}
