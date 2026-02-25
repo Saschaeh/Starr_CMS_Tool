@@ -1761,6 +1761,13 @@ with tab_images:
                         alt_for_filename = st.session_state.get(f"{restaurant_name}_{name}_alt", "")
                         new_filename = make_image_filename(restaurant_name, name, target_width, target_height, ext, alt_for_filename)
                         st.caption("Previously saved image loaded from storage.")
+                        if st.button("Delete Image", key=f"delete_{name}"):
+                            db.delete_image(restaurant_name, name)
+                            st.session_state[persisted_flag_key] = False
+                            st.session_state.pop(f"{restaurant_name}_{name}_alt", None)
+                            st.session_state.pop(f"{restaurant_name}_{name}_auto_generated", None)
+                            st.session_state.pop(f"{restaurant_name}_{name}_alt_source", None)
+                            st.rerun()
 
                 if resized_img:
                     st.markdown('<div class="field-label">Preview</div>', unsafe_allow_html=True)
