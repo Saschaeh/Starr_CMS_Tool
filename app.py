@@ -583,6 +583,35 @@ def _search_opentable_rid(restaurant_display_name):
         return ""
 
 
+def _search_resy_url(restaurant_display_name):
+    """Search Google for a restaurant on Resy and return the venue URL, or "".
+
+    Searches for 'restaurant_name starr site:resy.com' and extracts the
+    resy.com/cities/... URL from the results.
+    """
+    try:
+        query = restaurant_display_name.replace('_', ' ')
+        search_url = f"https://www.google.com/search?q={requests.utils.quote(query + ' starr site:resy.com')}"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        resp = requests.get(search_url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return ""
+        # Look for resy.com/cities/CITY/VENUE pattern in results
+        resy_match = re.search(
+            r'https?://resy\.com/cities/([a-z0-9-]+)/([a-z0-9-]+)(?:\?[^"&\s]*)?',
+            resp.text, re.IGNORECASE,
+        )
+        if resy_match:
+            city = resy_match.group(1)
+            venue = resy_match.group(2)
+            # Skip blog/generic pages
+            if venue not in ('', 'new', 'trending', 'best'):
+                return f"https://resy.com/cities/{city}/{venue}"
+        return ""
+    except Exception:
+        return ""
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def scrape_website(url):
     """Scrape text content from a restaurant website and key subpages.
@@ -1454,6 +1483,9 @@ with tab_restaurants:
                         if ok and d.get('tripleseat_form_id'):
                             st.session_state[f"{cleaned_name}_tripleseat_form_id"] = d['tripleseat_form_id']
                             db.update_restaurant_tripleseat(cleaned_name, d['tripleseat_form_id'])
+                        # If no Resy URL from HTML, search Google
+                        if ok and not d.get('resy_url'):
+                            d['resy_url'] = _search_resy_url(restaurant_input.strip())
                         if ok and d.get('resy_url'):
                             st.session_state[f"{cleaned_name}_resy_url"] = d['resy_url']
                             db.update_restaurant_resy_url(cleaned_name, d['resy_url'])
@@ -2153,6 +2185,14 @@ with tab_copy:
                         if not st.session_state.get(r_key):
                             st.session_state[r_key] = d['opentable_rid']
                             db.update_restaurant_opentable_rid(restaurant_name, d['opentable_rid'])
+                    # Auto-fill Resy URL if not already set
+                    if not d.get('resy_url'):
+                        d['resy_url'] = _search_resy_url(restaurant_name.replace('_', ' '))
+                    if d.get('resy_url'):
+                        resy_key = f"{restaurant_name}_resy_url"
+                        if not st.session_state.get(resy_key):
+                            st.session_state[resy_key] = d['resy_url']
+                            db.update_restaurant_resy_url(restaurant_name, d['resy_url'])
                     with st.spinner("Generating marketing copy with AI - this may take 30-60 seconds..."):
                         ok, copy_dict, err = generate_copy(content, restaurant_name, instructions=st.session_state.get('copy_instructions'))
                     if not ok:
@@ -2255,6 +2295,12 @@ with tab_brand:
                     d['opentable_rid'] = _search_opentable_rid(restaurant_name.replace('_', ' '))
                 if d.get('opentable_rid'):
                     st.session_state[f"{restaurant_name}_opentable_rid"] = d['opentable_rid']
+                    any_changed = True
+                # Resy URL fallback search
+                if not d.get('resy_url'):
+                    d['resy_url'] = _search_resy_url(restaurant_name.replace('_', ' '))
+                if d.get('resy_url'):
+                    st.session_state[f"{restaurant_name}_resy_url"] = d['resy_url']
                     any_changed = True
             logo_saved = False
             if ok and d.get('logo_url'):
