@@ -2398,30 +2398,31 @@ with tab_brand:
         if booking_val:
             st.caption(f"Booking platform: **{booking_val}**")
 
-        col_ot, col_ts = st.columns(2)
+        col_ot, col_resy = st.columns(2)
         with col_ot:
-            if booking_val == "OpenTable":
-                rid_key = f"{restaurant_name}_opentable_rid"
-                current_rid = st.session_state.get(rid_key, "")
-                new_rid = st.text_input(
-                    "OpenTable RID",
-                    value=current_rid,
-                    placeholder="e.g. 123456",
-                    help="Numeric Restaurant ID used in OpenTable widgets.",
-                )
-                if new_rid != current_rid:
-                    st.session_state[rid_key] = new_rid
-            elif booking_val == "Resy":
-                resy_key = f"{restaurant_name}_resy_url"
-                current_resy = st.session_state.get(resy_key, "")
-                new_resy = st.text_input(
-                    "Resy URL",
-                    value=current_resy,
-                    placeholder="https://resy.com/cities/new-york-ny/venues/restaurant-name",
-                    help="Full Resy venue URL used for Book A Table links.",
-                )
-                if new_resy != current_resy:
-                    st.session_state[resy_key] = new_resy
+            rid_key = f"{restaurant_name}_opentable_rid"
+            current_rid = st.session_state.get(rid_key, "")
+            new_rid = st.text_input(
+                "OpenTable RID",
+                value=current_rid,
+                placeholder="e.g. 123456",
+                help="Numeric Restaurant ID used in OpenTable widgets.",
+            )
+            if new_rid != current_rid:
+                st.session_state[rid_key] = new_rid
+        with col_resy:
+            resy_key = f"{restaurant_name}_resy_url"
+            current_resy = st.session_state.get(resy_key, "")
+            new_resy = st.text_input(
+                "Resy URL",
+                value=current_resy,
+                placeholder="https://resy.com/cities/new-york-ny/venues/restaurant-name",
+                help="Full Resy venue URL used for Book A Table links.",
+            )
+            if new_resy != current_resy:
+                st.session_state[resy_key] = new_resy
+
+        col_ts, _ = st.columns(2)
         with col_ts:
             ts_key = f"{restaurant_name}_tripleseat_form_id"
             current_ts = st.session_state.get(ts_key, "")
@@ -2563,12 +2564,9 @@ with tab_brand:
         save_brand_bottom = st.button("Save", key="save_brand_bottom")
         if save_brand_top or save_brand_bottom:
             db.update_restaurant_color(restaurant_name, st.session_state.get(f"{restaurant_name}_primary_color", ""))
-            booking = st.session_state.get(f"{restaurant_name}_booking_platform", "")
-            db.update_restaurant_booking(restaurant_name, booking)
-            if booking == "OpenTable":
-                db.update_restaurant_opentable_rid(restaurant_name, st.session_state.get(f"{restaurant_name}_opentable_rid", ""))
-            elif booking == "Resy":
-                db.update_restaurant_resy_url(restaurant_name, st.session_state.get(f"{restaurant_name}_resy_url", ""))
+            db.update_restaurant_booking(restaurant_name, st.session_state.get(f"{restaurant_name}_booking_platform", ""))
+            db.update_restaurant_opentable_rid(restaurant_name, st.session_state.get(f"{restaurant_name}_opentable_rid", ""))
+            db.update_restaurant_resy_url(restaurant_name, st.session_state.get(f"{restaurant_name}_resy_url", ""))
             db.update_restaurant_tripleseat(restaurant_name, st.session_state.get(f"{restaurant_name}_tripleseat_form_id", ""))
             db.update_restaurant_mailing_list_url(restaurant_name, st.session_state.get(f"{restaurant_name}_mailing_list_url", ""))
             db.update_restaurant_order_online_url(restaurant_name, st.session_state.get(f"{restaurant_name}_order_online_url", ""))
