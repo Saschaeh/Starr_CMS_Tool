@@ -2330,10 +2330,11 @@ with tab_brand:
                 st.warning("Could not detect brand color or booking platform from the website.")
 
         # ── Brand Identity: Logo + Favicon + Color side by side ──
+        st.subheader("Brand Identity")
         col_logo, col_favicon, col_color = st.columns([2, 1, 3])
 
         with col_logo:
-            st.subheader("Logo")
+            st.markdown("**Logo**")
             logo_persisted_key = f"{restaurant_name}_Logo_persisted"
             if not st.session_state.get(logo_persisted_key):
                 if db.get_image_data(restaurant_name, "Logo"):
@@ -2374,7 +2375,7 @@ with tab_brand:
                         st.error(f"Failed to fetch logo: {e}")
 
         with col_favicon:
-            st.subheader("Site Icon")
+            st.markdown("**Site Icon**")
             fav_persisted_key = f"{restaurant_name}_Favicon_persisted"
             if not st.session_state.get(fav_persisted_key):
                 if db.get_image_data(restaurant_name, "Favicon"):
@@ -2415,7 +2416,7 @@ with tab_brand:
                         st.error(f"Failed to fetch icon: {e}")
 
         with col_color:
-            st.subheader("Primary Color")
+            st.markdown("**Primary Color**")
             canonical = st.session_state.get(color_key, "")
             col_picker, col_hex, _ = st.columns(
                 [0.5, 1.5, 3], vertical_alignment="bottom"
