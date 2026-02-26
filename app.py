@@ -476,7 +476,7 @@ def _detect_site_metadata(html_bytes):
                 result['resy_url'] = f"https://resy.com/cities/{resy_match.group(1)}/{resy_match.group(2)}"
         if resy_match and not result['resy_url']:
             result['resy_url'] = resy_match.group(0)
-    elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref')):
+    elif any(m in html_lower for m in ('opentable.com/widget', 'opentable.com/r/', 'opentable.com/restref', 'ot-dtp-picker')):
         result['booking'] = "OpenTable"
         rid_match = re.search(r'opentable\.com[^"\']*[?&]rid=(\d+)', html_str, re.IGNORECASE)
         result['opentable_rid'] = rid_match.group(1) if rid_match else ""
