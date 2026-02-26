@@ -107,6 +107,10 @@ def render_copy_section(restaurant_name, section_id, section_label, word_min, wo
         st.session_state[section_key] = ""
 
     text = st.session_state[section_key]
+    # --- Temporary diagnostic (remove after debugging) ---
+    if text.strip():
+        st.caption(f"DEBUG {section_id}: {len(text)} chars in session_state")
+    # --- End diagnostic ---
     word_count = len(text.split()) if text.strip() else 0
     if word_count == 0:
         badge_class = "empty"
