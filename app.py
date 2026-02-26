@@ -129,9 +129,10 @@ def render_copy_section(restaurant_name, section_id, section_label, word_min, wo
     </div>
     """, unsafe_allow_html=True)
 
-    # Use value= explicitly — Streamlit text_area doesn't reliably pick up
-    # programmatically set session_state values via key= alone.
+    # Sync canonical value → widget key so Streamlit renders the latest text
+    # (value= only works on first render; after that widget key state wins)
     widget_key = f"_w_{section_key}"
+    st.session_state[widget_key] = text
     new_text = st.text_area(
         f"Edit {section_label}",
         value=text,
@@ -1994,10 +1995,12 @@ with tab_images:
 
                     st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
                     alt_text_val = st.session_state.get(alt_key, "")
+                    alt_widget_key = f"_w_{alt_key}"
+                    st.session_state[alt_widget_key] = alt_text_val
                     new_alt = st.text_area(
                         f"Alt text for {header}",
                         value=alt_text_val,
-                        key=f"_w_{alt_key}",
+                        key=alt_widget_key,
                         label_visibility="collapsed",
                         height=68
                     )
