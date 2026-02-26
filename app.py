@@ -129,10 +129,11 @@ def render_copy_section(restaurant_name, section_id, section_label, word_min, wo
     </div>
     """, unsafe_allow_html=True)
 
-    # Sync canonical value → widget key so Streamlit renders the latest text
-    # (value= only works on first render; after that widget key state wins)
+    # Initialize widget key from canonical on first render only;
+    # code-driven updates (e.g. generation) push to widget key explicitly.
     widget_key = f"_w_{section_key}"
-    st.session_state[widget_key] = text
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = text
     new_text = st.text_area(
         f"Edit {section_label}",
         value=text,
@@ -1670,7 +1671,8 @@ with tab_restaurants:
                 st.session_state.setdefault(notes_key, "")
                 st.session_state.setdefault(saved_notes_key, st.session_state[notes_key])
                 notes_wk = f"_w_{notes_key}"
-                st.session_state[notes_wk] = st.session_state[notes_key]
+                if notes_wk not in st.session_state:
+                    st.session_state[notes_wk] = st.session_state[notes_key]
                 notes_val = st.text_area(
                     "Notes",
                     value=st.session_state[notes_key],
@@ -1691,7 +1693,8 @@ with tab_restaurants:
                 pd_prev_key = f"{rest_name}_prev_pull_data"
                 st.session_state.setdefault(pd_prev_key, st.session_state[pd_key])
                 pd_wk = f"_w_{pd_key}"
-                st.session_state[pd_wk] = st.session_state[pd_key]
+                if pd_wk not in st.session_state:
+                    st.session_state[pd_wk] = st.session_state[pd_key]
                 st.checkbox("Push Data", value=st.session_state[pd_key], key=pd_wk)
                 st.session_state[pd_key] = bool(st.session_state.get(pd_wk, False))
                 pd_val = bool(st.session_state[pd_key])
@@ -1708,7 +1711,8 @@ with tab_restaurants:
                     ckey = f"{rest_name}_check_{ck}"
                     st.session_state.setdefault(ckey, False)
                     ck_wk = f"_w_{ckey}"
-                    st.session_state[ck_wk] = st.session_state[ckey]
+                    if ck_wk not in st.session_state:
+                        st.session_state[ck_wk] = st.session_state[ckey]
                     st.checkbox(cl, value=st.session_state[ckey], key=ck_wk)
                     st.session_state[ckey] = bool(st.session_state.get(ck_wk, False))
                 cl_dict = {ck: bool(st.session_state.get(f"{rest_name}_check_{ck}", False))
@@ -2008,17 +2012,20 @@ with tab_images:
                             alt_text = generate_alt_text(resized_img)
                         if alt_text:
                             st.session_state[alt_key] = alt_text
+                            st.session_state[f"_w_{alt_key}"] = alt_text
                             st.session_state[auto_key] = True
 
                     # Handle pending ADA regeneration (must set state BEFORE widget renders)
                     pending_alt_key = f"{restaurant_name}_{name}_pending_alt"
                     if pending_alt_key in st.session_state:
                         st.session_state[alt_key] = st.session_state.pop(pending_alt_key)
+                        st.session_state[f"_w_{alt_key}"] = st.session_state[alt_key]
 
                     st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
                     alt_text_val = st.session_state.get(alt_key, "")
                     alt_widget_key = f"_w_{alt_key}"
-                    st.session_state[alt_widget_key] = alt_text_val
+                    if alt_widget_key not in st.session_state:
+                        st.session_state[alt_widget_key] = alt_text_val
                     new_alt = st.text_area(
                         f"Alt text for {header}",
                         value=alt_text_val,
@@ -2244,6 +2251,7 @@ with tab_copy:
                     else:
                         for sec_key, sec_val in copy_dict.items():
                             st.session_state[f"{restaurant_name}_copy_{sec_key}"] = sec_val
+                            st.session_state[f"_w_{restaurant_name}_copy_{sec_key}"] = sec_val
                         # Persist all generated copy to database
                         db.save_all_copy(restaurant_name, copy_dict)
                         st.success("Copy generated!")
