@@ -2041,7 +2041,7 @@ with tab_images:
                 saved_count += 1
             _load_persisted_image.clear()
             if saved_count:
-                st.toast(f"Saved {saved_count} image(s) with alt text and settings.")
+                st.toast(f"Saved {saved_count} image(s). Mode: {'Turso' if db.USE_TURSO else 'Local SQLite'}")
             else:
                 st.info("No images to save. Upload images first.")
 
@@ -2248,7 +2248,11 @@ with tab_copy:
                 copy_dict[sid] = st.session_state.get(skey, "")
             db.save_all_copy(restaurant_name, copy_dict)
             db.update_restaurant_url(restaurant_name, st.session_state.get(url_key, ""))
-            st.toast("All copy and metadata saved.")
+            # Verify the save actually persisted by reading back
+            verify = db.get_copy_for_restaurant(restaurant_name)
+            saved_count = sum(1 for v in verify.values() if v.strip())
+            total = len(copy_dict)
+            st.toast(f"Saved ({saved_count}/{total} sections verified in DB). Mode: {'Turso' if db.USE_TURSO else 'Local SQLite'}")
 
 # ==============================================================================
 # TAB 4: BRAND
