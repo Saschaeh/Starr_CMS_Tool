@@ -232,20 +232,24 @@ def generate_alt_text(pil_image):
 # ============================================================================
 
 def _fetch_page_text(url, headers):
-    """Fetch a single page and return cleaned text, or empty string on failure."""
+    """Fetch a single page and return (cleaned_text, raw_bytes).
+
+    Returns a tuple so callers can also run metadata detection on the raw HTML.
+    """
     try:
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
     except Exception:
-        return ""
-    soup = BeautifulSoup(response.content, 'html.parser')
+        return "", b""
+    raw = response.content
+    soup = BeautifulSoup(raw, 'html.parser')
     for tag in soup.find_all(['script', 'style', 'nav', 'footer', 'header']):
         tag.decompose()
     content = soup.find('main') or soup.find('article') or soup.find('body')
     if not content:
-        return ""
+        return "", raw
     text = content.get_text(separator=' ', strip=True)
-    return re.sub(r'\s+', ' ', text).strip()
+    return re.sub(r'\s+', ' ', text).strip(), raw
 
 
 # Subpage path keywords to look for when scraping restaurant sites
@@ -681,7 +685,14 @@ def scrape_website(url):
     # like group dining numbers aren't truncated by the token limit)
     subpage_parts = []
     for sub_url in sorted(subpage_urls)[:10]:
-        page_text = _fetch_page_text(sub_url, headers)
+        page_text, raw_html = _fetch_page_text(sub_url, headers)
+        # Run metadata detection on subpages (fill gaps only — e.g. Tripleseat
+        # forms often live on group-dining / private-events pages, not homepage)
+        if raw_html:
+            sub_meta = _detect_site_metadata(raw_html)
+            for key, val in sub_meta.items():
+                if val and not detected.get(key):
+                    detected[key] = val
         if page_text and len(page_text) > 30:
             path_label = urlparse(sub_url).path.strip('/').upper().replace('-', ' ')
             subpage_parts.append(f"[{path_label}]\n{page_text}")
