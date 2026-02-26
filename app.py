@@ -1669,13 +1669,17 @@ with tab_restaurants:
                 saved_notes_key = f"{rest_name}_saved_notes"
                 st.session_state.setdefault(notes_key, "")
                 st.session_state.setdefault(saved_notes_key, st.session_state[notes_key])
+                notes_wk = f"_w_{notes_key}"
+                st.session_state[notes_wk] = st.session_state[notes_key]
                 notes_val = st.text_area(
                     "Notes",
-                    key=notes_key,
+                    value=st.session_state[notes_key],
+                    key=notes_wk,
                     placeholder="Add comments, requests and requirements here.",
                     height=100,
                     label_visibility="collapsed",
                 )
+                st.session_state[notes_key] = notes_val
                 if notes_val != st.session_state[saved_notes_key]:
                     st.session_state[saved_notes_key] = notes_val
                     db.update_restaurant_notes(rest_name, notes_val)
@@ -1686,8 +1690,11 @@ with tab_restaurants:
                 st.session_state.setdefault(pd_key, False)
                 pd_prev_key = f"{rest_name}_prev_pull_data"
                 st.session_state.setdefault(pd_prev_key, st.session_state[pd_key])
-                st.checkbox("Push Data", key=pd_key)
-                pd_val = bool(st.session_state.get(pd_key, False))
+                pd_wk = f"_w_{pd_key}"
+                st.session_state[pd_wk] = st.session_state[pd_key]
+                st.checkbox("Push Data", value=st.session_state[pd_key], key=pd_wk)
+                st.session_state[pd_key] = bool(st.session_state.get(pd_wk, False))
+                pd_val = bool(st.session_state[pd_key])
                 if pd_val != st.session_state[pd_prev_key]:
                     st.session_state[pd_prev_key] = pd_val
                     db.update_restaurant_pull_data(rest_name, pd_val)
@@ -1700,7 +1707,10 @@ with tab_restaurants:
                 for ck, cl in _CHECKLIST_ITEMS:
                     ckey = f"{rest_name}_check_{ck}"
                     st.session_state.setdefault(ckey, False)
-                    st.checkbox(cl, key=ckey)
+                    ck_wk = f"_w_{ckey}"
+                    st.session_state[ck_wk] = st.session_state[ckey]
+                    st.checkbox(cl, value=st.session_state[ckey], key=ck_wk)
+                    st.session_state[ckey] = bool(st.session_state.get(ck_wk, False))
                 cl_dict = {ck: bool(st.session_state.get(f"{rest_name}_check_{ck}", False))
                            for ck, _ in _CHECKLIST_ITEMS}
                 cl_json = json.dumps(cl_dict)
