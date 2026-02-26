@@ -63,14 +63,24 @@ def get_connection():
     return conn
 
 
+_last_sync_status = ""  # exposed for diagnostics
+
+
 def _commit(conn):
     """Commit and, for Turso connections, sync to ensure data reaches the remote server."""
+    global _last_sync_status
     conn.commit()
     if USE_TURSO:
-        try:
-            conn.sync()
-        except Exception:
-            pass  # sync() not available on all libsql connection types
+        if hasattr(conn, 'sync'):
+            try:
+                conn.sync()
+                _last_sync_status = "sync OK"
+            except Exception as e:
+                _last_sync_status = f"sync FAILED: {e}"
+        else:
+            _last_sync_status = "no sync() method on connection"
+    else:
+        _last_sync_status = "local sqlite (no sync needed)"
 
 
 # ---------------------------------------------------------------------------

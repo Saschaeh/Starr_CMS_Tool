@@ -1348,9 +1348,15 @@ if 'hf_api_token' not in st.session_state:
 # Load persisted data from SQLite on first run of this session
 if 'db_loaded' not in st.session_state:
     st.session_state['db_loaded'] = True
+    # --- Temporary diagnostic (remove after debugging) ---
+    _diag_parts = [f"DB: {'Turso' if db.USE_TURSO else 'Local SQLite'}"]
+    if db.USE_TURSO:
+        _diag_parts.append(f"URL: {db.TURSO_DB_URL[:40]}...")
+    # --- End diagnostic ---
     with st.spinner("Loading restaurant data..."):
         saved_restaurants = db.get_all_restaurants()
         st.session_state['restaurants_list'] = [r['name'] for r in saved_restaurants]
+        _diag_parts.append(f"Loaded {len(saved_restaurants)} restaurants")
 
         # Restore URLs, copy, alt text, and overlay settings per restaurant
         for r in saved_restaurants:
@@ -1388,11 +1394,13 @@ if 'db_loaded' not in st.session_state:
 
             # Restore copy sections
             copy_data = db.get_copy_for_restaurant(rname)
+            _copy_count = sum(1 for v in copy_data.values() if v.strip())
             for sec_id, content in copy_data.items():
                 st.session_state[f"{rname}_copy_{sec_id}"] = content
 
             # Restore image metadata (alt text, overlay)
             img_data = db.get_images_for_restaurant(rname)
+            _alt_count = sum(1 for v in img_data.values() if v.get('alt_text'))
             for field_name, info in img_data.items():
                 if info['alt_text']:
                     st.session_state[f"{rname}_{field_name}_alt"] = info['alt_text']
@@ -1401,6 +1409,11 @@ if 'db_loaded' not in st.session_state:
                 # Mark that a persisted image exists in the database
                 if info.get('has_image'):
                     st.session_state[f"{rname}_{field_name}_persisted"] = True
+
+            _diag_parts.append(f"{rname}: {_copy_count} copy, {_alt_count} alt")
+
+        # --- Show diagnostic (remove after debugging) ---
+        st.session_state['_db_diag'] = " | ".join(_diag_parts)
 
         # Select first restaurant if none selected
         if st.session_state['restaurants_list']:
@@ -1412,6 +1425,11 @@ if 'restaurants_list' not in st.session_state:
     st.session_state['restaurants_list'] = []
 if 'restaurant_name_cleaned' not in st.session_state:
     st.session_state['restaurant_name_cleaned'] = None
+
+# --- Temporary diagnostic banner (remove after debugging) ---
+if '_db_diag' in st.session_state:
+    st.caption(f"DEBUG: {st.session_state['_db_diag']}")
+# --- End diagnostic ---
 
 # Image mappings: (name) -> (target_width, target_height)
 image_mappings = {
@@ -2252,7 +2270,7 @@ with tab_copy:
             verify = db.get_copy_for_restaurant(restaurant_name)
             saved_count = sum(1 for v in verify.values() if v.strip())
             total = len(copy_dict)
-            st.toast(f"Saved ({saved_count}/{total} sections verified in DB). Mode: {'Turso' if db.USE_TURSO else 'Local SQLite'}")
+            st.toast(f"Saved ({saved_count}/{total} verified). {'Turso' if db.USE_TURSO else 'SQLite'} | {db._last_sync_status}")
 
 # ==============================================================================
 # TAB 4: BRAND
