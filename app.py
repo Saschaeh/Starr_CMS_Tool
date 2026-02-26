@@ -497,12 +497,24 @@ def _detect_site_metadata(html_bytes):
         result['tripleseat_form_id'] = ts_match.group(1) if ts_match else ""
 
     # --- Mailing list ---
-    mail_match = re.search(
-        r'https?://(?:[a-z0-9.-]+\.e2ma\.net/[^\s"\'<>]*|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
-        html_str, re.IGNORECASE
-    )
-    if mail_match:
-        result['mailing_list_url'] = mail_match.group(0).rstrip('/')
+    # Prefer <a> tags whose visible text says "mailing list" / "subscribe" / "newsletter"
+    _mail_soup = BeautifulSoup(html_bytes, 'html.parser')
+    _mail_keywords = ('mailing list', 'subscribe', 'newsletter', 'sign up for')
+    for a_tag in _mail_soup.find_all('a', href=True):
+        link_text = a_tag.get_text(strip=True).lower()
+        if any(kw in link_text for kw in _mail_keywords):
+            href = a_tag['href'].strip()
+            if href and href.startswith('http'):
+                result['mailing_list_url'] = href.rstrip('/')
+                break
+    # Fallback: regex scan for known mailing-list platform URLs
+    if not result['mailing_list_url']:
+        mail_match = re.search(
+            r'https?://(?:[a-z0-9.-]+\.e2ma\.net/[^\s"\'<>]*|[a-z0-9.-]+\.list-manage\.com/subscribe[^\s"\'<>]*|[a-z0-9.-]+\.createsend\.com/[^\s"\'<>]*|mailchi\.mp/[^\s"\'<>]*)',
+            html_str, re.IGNORECASE
+        )
+        if mail_match:
+            result['mailing_list_url'] = mail_match.group(0).rstrip('/')
 
     # --- Order online / delivery ---
     order_match = re.search(
