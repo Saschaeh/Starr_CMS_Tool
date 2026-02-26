@@ -63,6 +63,16 @@ def get_connection():
     return conn
 
 
+def _commit(conn):
+    """Commit and, for Turso connections, sync to ensure data reaches the remote server."""
+    conn.commit()
+    if USE_TURSO:
+        try:
+            conn.sync()
+        except Exception:
+            pass  # sync() not available on all libsql connection types
+
+
 # ---------------------------------------------------------------------------
 # Schema
 # ---------------------------------------------------------------------------
@@ -128,7 +138,7 @@ def init_db():
     ]:
         try:
             conn.execute(f"ALTER TABLE restaurants ADD COLUMN {col} {col_def}")
-            conn.commit()
+            _commit(conn)
         except Exception:
             pass  # column already exists
 
@@ -141,121 +151,121 @@ def add_restaurant(name, display_name, website_url=''):
         "INSERT OR IGNORE INTO restaurants (name, display_name, website_url) VALUES (?, ?, ?)",
         (name, display_name, website_url)
     )
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_url(name, website_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET website_url = ? WHERE name = ?", (website_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_color(name, primary_color):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET primary_color = ? WHERE name = ?", (primary_color, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_checklist(name, checklist_json):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET checklist = ? WHERE name = ?", (checklist_json, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_booking(name, booking_platform):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET booking_platform = ? WHERE name = ?", (booking_platform, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_opentable_rid(name, opentable_rid):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET opentable_rid = ? WHERE name = ?", (opentable_rid, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_tripleseat(name, tripleseat_form_id):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET tripleseat_form_id = ? WHERE name = ?", (tripleseat_form_id, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_resy_url(name, resy_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET resy_url = ? WHERE name = ?", (resy_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_mailing_list_url(name, mailing_list_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET mailing_list_url = ? WHERE name = ?", (mailing_list_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_facebook_url(name, facebook_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET facebook_url = ? WHERE name = ?", (facebook_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_instagram_url(name, instagram_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET instagram_url = ? WHERE name = ?", (instagram_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_phone(name, phone):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET phone = ? WHERE name = ?", (phone, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_email_general(name, email_general):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET email_general = ? WHERE name = ?", (email_general, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_email_events(name, email_events):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET email_events = ? WHERE name = ?", (email_events, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_email_marketing(name, email_marketing):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET email_marketing = ? WHERE name = ?", (email_marketing, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_email_press(name, email_press):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET email_press = ? WHERE name = ?", (email_press, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_address(name, address):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET address = ? WHERE name = ?", (address, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_google_maps_url(name, google_maps_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET google_maps_url = ? WHERE name = ?", (google_maps_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_order_online_url(name, order_online_url):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET order_online_url = ? WHERE name = ?", (order_online_url, name))
-    conn.commit()
+    _commit(conn)
 
 
 def update_restaurant_pull_data(name, pull_data):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET pull_data = ? WHERE name = ?", (int(pull_data), name))
-    conn.commit()
+    _commit(conn)
 
 
 def get_all_restaurants():
@@ -276,7 +286,7 @@ def get_all_restaurants():
 def update_restaurant_notes(name, notes):
     conn = get_connection()
     conn.execute("UPDATE restaurants SET notes = ? WHERE name = ?", (notes, name))
-    conn.commit()
+    _commit(conn)
 
 
 def delete_restaurant(name):
@@ -287,7 +297,7 @@ def delete_restaurant(name):
     conn.execute("DELETE FROM images WHERE restaurant = ?", (name,))
     conn.execute("DELETE FROM copy_sections WHERE restaurant = ?", (name,))
     conn.execute("DELETE FROM restaurants WHERE name = ?", (name,))
-    conn.commit()
+    _commit(conn)
 
 
 # ─── Image CRUD ──────────────────────────────────────────────────────────────
@@ -304,7 +314,7 @@ def save_image(restaurant, field_name, image_bytes, original_filename, alt_text=
             alt_text = excluded.alt_text,
             overlay_opacity = excluded.overlay_opacity
     """, (restaurant, field_name, original_filename, image_bytes, alt_text, overlay_opacity))
-    conn.commit()
+    _commit(conn)
 
 
 def delete_image(restaurant, field_name):
@@ -314,7 +324,7 @@ def delete_image(restaurant, field_name):
         "DELETE FROM images WHERE restaurant = ? AND field_name = ?",
         (restaurant, field_name)
     )
-    conn.commit()
+    _commit(conn)
 
 
 def update_alt_text(restaurant, field_name, alt_text):
@@ -323,7 +333,7 @@ def update_alt_text(restaurant, field_name, alt_text):
         "UPDATE images SET alt_text = ? WHERE restaurant = ? AND field_name = ?",
         (alt_text, restaurant, field_name)
     )
-    conn.commit()
+    _commit(conn)
 
 
 def update_overlay(restaurant, field_name, overlay_opacity):
@@ -332,7 +342,7 @@ def update_overlay(restaurant, field_name, overlay_opacity):
         "UPDATE images SET overlay_opacity = ? WHERE restaurant = ? AND field_name = ?",
         (overlay_opacity, restaurant, field_name)
     )
-    conn.commit()
+    _commit(conn)
 
 
 def get_images_for_restaurant(restaurant):
@@ -383,7 +393,7 @@ def save_copy_section(restaurant, section_id, content):
         VALUES (?, ?, ?)
         ON CONFLICT(restaurant, section_id) DO UPDATE SET content = excluded.content
     """, (restaurant, section_id, content))
-    conn.commit()
+    _commit(conn)
 
 
 def get_copy_for_restaurant(restaurant):
@@ -406,4 +416,4 @@ def save_all_copy(restaurant, copy_dict):
             VALUES (?, ?, ?)
             ON CONFLICT(restaurant, section_id) DO UPDATE SET content = excluded.content
         """, (restaurant, section_id, content))
-    conn.commit()
+    _commit(conn)

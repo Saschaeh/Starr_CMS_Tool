@@ -1981,11 +1981,17 @@ with tab_images:
                         if alt_text:
                             st.session_state[alt_key] = alt_text
                             st.session_state[auto_key] = True
+                            # Auto-save image + alt text to DB immediately
+                            overlay = st.session_state.get(f"{restaurant_name}_{name}_opacity", 40)
+                            db.save_image(restaurant_name, name, img_bytes, _orig_filename, alt_text=alt_text, overlay_opacity=overlay)
+                            st.session_state[f"{restaurant_name}_{name}_persisted"] = True
 
                     # Handle pending ADA regeneration (must set state BEFORE widget renders)
                     pending_alt_key = f"{restaurant_name}_{name}_pending_alt"
                     if pending_alt_key in st.session_state:
                         st.session_state[alt_key] = st.session_state.pop(pending_alt_key)
+                        # Auto-save updated alt text to DB
+                        db.update_alt_text(restaurant_name, name, st.session_state[alt_key])
 
                     st.markdown('<div class="field-label">Alt Text (ADA)</div>', unsafe_allow_html=True)
                     new_alt = st.text_area(
@@ -2007,6 +2013,8 @@ with tab_images:
                         if alt_text:
                             st.session_state[pending_alt_key] = alt_text
                             st.session_state[f"{restaurant_name}_{name}_auto_generated"] = True
+                            # Auto-save regenerated alt text to DB
+                            db.update_alt_text(restaurant_name, name, alt_text)
                             st.rerun()
                         else:
                             st.warning("Alt text generation failed. Check your HF token or try again.")
